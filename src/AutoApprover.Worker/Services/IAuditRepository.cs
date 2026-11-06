@@ -4,6 +4,6 @@ namespace AutoApprover.Worker.Services;
 
 public interface IAuditRepository
 {
-    Task EnsureSchemaAsync();
+    Task EnsureSchemaAsync(CancellationToken ct = default);
     Task WriteAsync(DecisionResult decision, CancellationToken ct = default);
 }

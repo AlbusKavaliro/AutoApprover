@@ -55,6 +55,7 @@ public class DecisionEngineSpec
         string title,
         string creator,
         IReadOnlyList<string> changedFiles,
+        IReadOnlyDictionary<string, string>? dockerfileDiffs = null,
         string? sourceBranch = "refs/heads/feature",
         string? targetBranch = "refs/heads/main")
     {
@@ -65,7 +66,8 @@ public class DecisionEngineSpec
             CreatorUniqueName: $"{creator}[bot]",
             SourceBranch: sourceBranch,
             TargetBranch: targetBranch,
-            ChangedFilePaths: changedFiles);
+            ChangedFilePaths: changedFiles,
+            DockerfileDiffs: dockerfileDiffs ?? new Dictionary<string, string>());
     }
 
     [Fact]
@@ -109,7 +111,7 @@ public class DecisionEngineSpec
     }
 
     [Fact]
-    public void Renovate_PR_mit_nur_Dockerfile_wird_als_dockerfile_digest_genehmigt()
+    public void Renovate_PR_mit_nur_Dockerfile_DigestWechsel_wird_genehmigt()
     {
         // Arrange
         var engine = new DecisionEngine(CreateConfiguration(), TestLogger.Create<DecisionEngine>());
@@ -119,7 +121,16 @@ public class DecisionEngineSpec
             id: 7,
             title: "Update docker base image",
             creator: "renovate",
-            changedFiles: ["Dockerfile"]);
+            changedFiles: ["Dockerfile"],
+            dockerfileDiffs: new Dictionary<string, string>
+            {
+                ["Dockerfile"] = """
+=== ALT ===
+FROM mcr.microsoft.com/dotnet/aspnet:8.0.10@sha256:a1b2c3d4e5f6...
+=== NEU ===
+FROM mcr.microsoft.com/dotnet/aspnet:8.0.10@sha256:d4e5f6a7b8c9...
+"""
+            });
 
         // Act
         var result = engine.Evaluate(check, pr);
@@ -129,6 +140,36 @@ public class DecisionEngineSpec
         Assert.Equal("dockerfile_digest", result.ChangeType);
         Assert.Contains("renovate", result.Reason);
         Assert.Equal(7, result.PullRequestId);
+    }
+
+    [Fact]
+    public void Dockerfile_mit_Tag_Wechsel_Major_wird_uebersprungen()
+    {
+        // Arrange
+        var engine = new DecisionEngine(CreateConfiguration(), TestLogger.Create<DecisionEngine>());
+        var check = BeispielCheck("anwendung-a-prod", "AppA", "main-ci", 47, "repo-1", "xyz999");
+
+        var pr = BeispielPR(
+            id: 12,
+            title: "Update docker base image",
+            creator: "renovate",
+            changedFiles: ["Dockerfile"],
+            dockerfileDiffs: new Dictionary<string, string>
+            {
+                ["Dockerfile"] = """
+=== ALT ===
+FROM mcr.microsoft.com/dotnet/aspnet:8.0.10@sha256:a1b2c3d4e5f6...
+=== NEU ===
+FROM mcr.microsoft.com/dotnet/aspnet:9.0.0@sha256:d4e5f6a7b8c9...
+"""
+            });
+
+        // Act
+        var result = engine.Evaluate(check, pr);
+
+        // Assert
+        Assert.False(result.ShouldApprove);
+        Assert.Contains("nicht erlaubte Änderung", result.Reason);
     }
 
     [Fact]

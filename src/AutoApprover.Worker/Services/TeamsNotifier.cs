@@ -1,9 +1,12 @@
+using System.Globalization;
 using System.Text.Json;
 using AutoApprover.Worker.Models;
 
 namespace AutoApprover.Worker.Services;
 
-public sealed class TeamsNotifier(string webhookUrl) : ITeamsNotifier
+public sealed class TeamsNotifier(
+    string webhookUrl,
+    ILogger<TeamsNotifier> logger) : ITeamsNotifier
 {
     private static readonly HttpClient HttpClient = new();
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -31,12 +34,12 @@ public sealed class TeamsNotifier(string webhookUrl) : ITeamsNotifier
                         new { name = "Entscheidung", value = (object?)decision.Decision ?? "–" },
                         new { name = "Grund", value = (object?)decision.Reason ?? "–" },
                         new { name = "Änderungstyp", value = (object?)decision.ChangeType ?? "–" },
-                        new { name = "PR-ID", value = (object?)(decision.PullRequestId == 0 ? "–" : decision.PullRequestId.ToString()) ?? "–" },
+                        new { name = "PR-ID", value = (object?)(decision.PullRequestId == 0 ? "–" : decision.PullRequestId.ToString(CultureInfo.InvariantCulture)) ?? "–" },
                         new { name = "PR-Titel", value = (object?)(decision.PullRequestTitle ?? "–") ?? "–" },
                         new { name = "PR-Ersteller", value = (object?)(decision.PullRequestCreator ?? "–") ?? "–" },
                         new { name = "Umgebung", value = (object?)(decision.EnvironmentName ?? "–") ?? "–" },
                         new { name = "Projekt", value = (object?)(decision.ProjectName ?? "–") ?? "–" },
-                        new { name = "Zeit", value = (object?)DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC") ?? "–" }
+                        new { name = "Zeit", value = (object?)DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC", CultureInfo.InvariantCulture) ?? "–" }
                     }
                 }
             }
@@ -49,11 +52,12 @@ public sealed class TeamsNotifier(string webhookUrl) : ITeamsNotifier
         {
             var response = await HttpClient.PostAsync(webhookUrl, content);
             response.EnsureSuccessStatusCode();
+            logger.LogInformation("Teams-Benachrichtigung gesendet (Entscheidung: {Decision})", decision.Decision);
         }
         catch (Exception ex)
         {
             // Teams-Benachrichtigung darf den Worker nicht abstürzen lassen
-            System.Console.WriteLine($"Fehler beim Senden der Teams-Nachricht: {ex.Message}");
+            logger.LogWarning(ex, "Fehler beim Senden der Teams-Nachricht: {Message}", ex.Message);
         }
     }
 }

@@ -71,6 +71,9 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
             // Geänderte Dateien des PR abfragen
             var changedFiles = await GetChangedFilesAsync(repositoryId, prId, ct);
 
+            // Dockerfile-Diffs für Digest-Prüfung abfragen
+            var dockerfileDiffs = await GetDockerfileDiffsAsync(repositoryId, prId, ct);
+
             // Prüfung: Enthält der PR den Ziel-Commit als Merge-Ziel?
             if (pr.TryGetProperty("lastMergeTargetCommit", out var targetCommit) &&
                 targetCommit.TryGetProperty("commitId", out var tcid) &&
@@ -83,25 +86,23 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
                     CreatorUniqueName: creatorUnique,
                     SourceBranch: sourceBranch,
                     TargetBranch: targetBranch,
-                    ChangedFilePaths: changedFiles);
+                    ChangedFilePaths: changedFiles,
+                    DockerfileDiffs: dockerfileDiffs);
             }
         }
 
         return null;
     }
 
-    public Task ApproveCheckAsync(int checkEvaluationId, CancellationToken ct = default)
+    public async Task ApproveCheckAsync(int checkEvaluationId, CancellationToken ct = default)
     {
         var url = $"_apis/pipelines/checks/check-evaluations/{checkEvaluationId}?api-version={ApiVersion}";
         var body = JsonSerializer.Serialize(new { status = "approved" }, JsonOptions);
         using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
 
-        return httpClient.PatchAsync(url, content, ct).ContinueWith(async t =>
-        {
-            var resp = await t;
-            resp.EnsureSuccessStatusCode();
-            logger.LogInformation("CheckEvaluation {Id} erfolgreich genehmigt (Status {StatusCode})", checkEvaluationId, resp.StatusCode);
-        }, ct);
+        using var response = await httpClient.PatchAsync(url, content, ct);
+        response.EnsureSuccessStatusCode();
+        logger.LogInformation("CheckEvaluation {Id} erfolgreich genehmigt (Status {StatusCode})", checkEvaluationId, response.StatusCode);
     }
 
     private async Task<IReadOnlyList<string>> GetChangedFilesAsync(string repositoryId, int pullRequestId, CancellationToken ct)
@@ -124,4 +125,60 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
 
         return files;
     }
+
+    public async Task<IReadOnlyDictionary<string, string>> GetDockerfileDiffsAsync(
+        string repositoryId,
+        int pullRequestId,
+        CancellationToken ct = default)
+    {
+        var url = $"_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/diffs/commits?api-version={ApiVersion}";
+
+        using var response = await httpClient.GetAsync(url, ct);
+        if (!response.IsSuccessStatusCode)
+            return new Dictionary<string, string>();
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var doc = JsonDocument.Parse(json);
+
+        var diffs = new Dictionary<string, string>();
+        foreach (var change in doc.RootElement.GetProperty("changes").EnumerateArray())
+        {
+            if (!change.TryGetProperty("item", out var item) ||
+                !item.TryGetProperty("path", out var path))
+            {
+                continue;
+            }
+
+            var filePath = path.GetString() ?? string.Empty;
+            if (!IsDockerfile(filePath.ToLowerInvariant()))
+                continue;
+
+            // Versuche, alten und neuen Inhalt zu extrahieren (je nach ADO Server Version verfügbar)
+            var sb = new System.Text.StringBuilder();
+
+            if (change.TryGetProperty("originalContent", out var original) &&
+                original.TryGetProperty("content", out var originalContent))
+            {
+                sb.AppendLine("=== ALT ===");
+                sb.AppendLine(originalContent.GetString() ?? string.Empty);
+            }
+
+            if (change.TryGetProperty("newContent", out var neu) &&
+                neu.TryGetProperty("content", out var newContent))
+            {
+                sb.AppendLine("=== NEU ===");
+                sb.AppendLine(newContent.GetString() ?? string.Empty);
+            }
+
+            if (sb.Length > 0)
+                diffs[filePath] = sb.ToString();
+        }
+
+        return diffs;
+    }
+
+    private static bool IsDockerfile(string lowerPath) =>
+        lowerPath.EndsWith("dockerfile") ||
+        lowerPath.EndsWith(".dockerfile") ||
+        lowerPath.Contains("dockerfile.");
 }

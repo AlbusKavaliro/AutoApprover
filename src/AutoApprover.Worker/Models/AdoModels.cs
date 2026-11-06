@@ -18,7 +18,8 @@ public sealed record PullRequestInfo(
     string CreatorUniqueName,
     string SourceBranch,
     string TargetBranch,
-    IReadOnlyList<string> ChangedFilePaths);
+    IReadOnlyList<string> ChangedFilePaths,
+    IReadOnlyDictionary<string, string> DockerfileDiffs); // Pfad -> Diff-Inhalt (alt/neu)
 
 public sealed record GitDiffChange(
     string Path,

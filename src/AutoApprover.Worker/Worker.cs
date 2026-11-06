@@ -14,8 +14,20 @@ public sealed class Worker(
     private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(
         configuration.GetValue<int>("AdopSettings:PollingIntervalSeconds", 60));
 
+    private readonly bool _runOnce = configuration.GetValue<bool>("AdopSettings:RunOnce",
+        Environment.GetEnvironmentVariable("AUTOAPPROVE_ONCE") is { } envVar &&
+        bool.TryParse(envVar, out var parsed) && parsed);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (_runOnce)
+        {
+            logger.LogInformation("Auto-Approver Worker im One-Off-Modus (einzelner Durchlauf)");
+            await ProcessPendingChecksAsync(stoppingToken);
+            logger.LogInformation("Auto-Approver Worker One-Off abgeschlossen.");
+            return;
+        }
+
         logger.LogInformation("Auto-Approver Worker gestartet. Polling-Intervall: {Interval}s", _pollingInterval.TotalSeconds);
 
         while (!stoppingToken.IsCancellationRequested)

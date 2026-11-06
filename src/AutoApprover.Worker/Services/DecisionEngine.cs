@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using AutoApprover.Worker.Models;
 
 namespace AutoApprover.Worker.Services;
@@ -8,6 +9,11 @@ public sealed class DecisionEngine(
 {
     private readonly string _renovateCreator = configuration["AdopSettings:RenovatePrCreator"] ?? "renovate";
     private readonly ILogger<DecisionEngine> _logger = logger;
+
+    // FROM mcr.microsoft.com/dotnet/aspnet:8.0.10@sha256:a1b2c3...
+    private static readonly Regex FromLineRegex = new(
+        @"^FROM\s+(.+?)(?::([^@\s]+))?(?:@sha256:([0-9a-f]+))?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline);
 
     public DecisionResult Evaluate(PendingCheck check, PullRequestInfo? prInfo)
     {
@@ -28,8 +34,8 @@ public sealed class DecisionEngine(
                 prInfo.CreatorDisplayName);
         }
 
-        // 2. Geänderte Dateien prüfen
-        var fileAnalysis = AnalyzeChangedFiles(prInfo.ChangedFilePaths);
+        // 2. Geänderte Dateien prüfen (inkl. Dockerfile-Digest-Verifikation)
+        var fileAnalysis = AnalyzeChangedFiles(prInfo);
         if (!fileAnalysis.IsAllowed)
             return new DecisionResult(
                 false,
@@ -61,13 +67,13 @@ public sealed class DecisionEngine(
             prInfo.CreatorDisplayName);
     }
 
-    private static FileAnalysis AnalyzeChangedFiles(IReadOnlyList<string> changedFiles)
+    private FileAnalysis AnalyzeChangedFiles(PullRequestInfo prInfo)
     {
         var disallowed = new List<string>();
         var dockerfileChanges = new List<string>();
         var versionFileChanges = new List<string>();
 
-        foreach (var file in changedFiles)
+        foreach (var file in prInfo.ChangedFilePaths)
         {
             var lower = file.ToLowerInvariant();
 
@@ -88,12 +94,31 @@ public sealed class DecisionEngine(
         if (disallowed.Count > 0)
             return new FileAnalysis(false, "none", disallowed);
 
-        // Nur Dockerfile-Änderungen: Prüfung auf SHA256-Digest oder Minor/Patch
+        // Nur Dockerfile-Änderungen: tatsächlichen Diff-Inhalt prüfen
         if (dockerfileChanges.Count > 0 && versionFileChanges.Count == 0)
         {
-            // Vereinfachte Prüfung: Der Aufrufer (AdoApiClient) liefert nur die Pfade.
-            // Die tatsächliche Digest-Prüfung müsste über den Diff-Inhalt erfolgen.
-            // Hier markieren wir es als dockerfile_digest; die Detailprüfung erfolgt im AdoApiClient oder hier über den Diff-Inhalt.
+            foreach (var dockerfile in dockerfileChanges)
+            {
+                if (!prInfo.DockerfileDiffs.TryGetValue(dockerfile, out var diffContent) ||
+                    string.IsNullOrWhiteSpace(diffContent))
+                {
+                    // Kein Diff-Inhalt verfügbar -> konservativ: nicht genehmigen
+                    _logger.LogWarning("Kein Diff-Inhalt fuer Dockerfile {Dockerfile} verfuegbar. PR wird uebersprungen.", dockerfile);
+                    return new FileAnalysis(
+                        false,
+                        "none",
+                        new[] { $"Dockerfile {dockerfile}: kein Diff-Inhalt verfuegbar" });
+                }
+
+                if (!IsDockerfileDiffOnlyDigestOrMinorPatch(diffContent))
+                {
+                    return new FileAnalysis(
+                        false,
+                        "none",
+                        new[] { $"Dockerfile {dockerfile}: nicht erlaubte Änderung (mehr als Digest oder Minor/Patch)" });
+                }
+            }
+
             return new FileAnalysis(true, "dockerfile_digest", Array.Empty<string>());
         }
 
@@ -102,9 +127,122 @@ public sealed class DecisionEngine(
             return new FileAnalysis(true, "patch", Array.Empty<string>());
 
         // Gemischt oder leer
-        return changedFiles.Count == 0
+        return prInfo.ChangedFilePaths.Count == 0
             ? new FileAnalysis(false, "none", Array.Empty<string>())
             : new FileAnalysis(true, "patch", Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// Prüft, ob der Dockerfile-Diff nur SHA256-Digest-Wechsel oder
+    /// Minor/Patch-Tag-Wechsel in FROM-Zeilen enthält.
+    /// </summary>
+    private static bool IsDockerfileDiffOnlyDigestOrMinorPatch(string diffContent)
+    {
+        // Trenne alt und neu anhand der Marker
+        var parts = diffContent.Split(new[] { "=== ALT ===", "=== NEU ===" }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+            return false;
+
+        var oldContent = parts[0];
+        var newContent = parts[1];
+
+        var oldFromLines = ExtractFromLines(oldContent);
+        var newFromLines = ExtractFromLines(newContent);
+
+        // Anzahl der FROM-Zeilen muss identisch sein
+        if (oldFromLines.Count != newFromLines.Count)
+            return false;
+
+        for (int i = 0; i < oldFromLines.Count; i++)
+        {
+            if (!IsFromLineChangeAllowed(oldFromLines[i], newFromLines[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static List<string> ExtractFromLines(string content)
+    {
+        var lines = new List<string>();
+        foreach (Match match in FromLineRegex.Matches(content))
+        {
+            lines.Add(match.Value);
+        }
+        return lines;
+    }
+
+    /// <summary>
+    /// Prüft, ob eine FROM-Zeilen-Änderung erlaubt ist.
+    /// Erlaubt:
+    ///   - Nur Digest-Wechsel (gleicher Repo+Tag, anderer @sha256)
+    ///   - Minor/Patch Tag-Wechsel (gleiche Major-Version)
+    /// Nicht erlaubt:
+    ///   - Repo-Wechsel
+    ///   - Major Tag-Wechsel
+    ///   - Tag hinzugefügt/entfernt
+    /// </summary>
+    private static bool IsFromLineChangeAllowed(string oldFrom, string newFrom)
+    {
+        var oldMatch = FromLineRegex.Match(oldFrom);
+        var newMatch = FromLineRegex.Match(newFrom);
+
+        if (!oldMatch.Success || !newMatch.Success)
+            return false;
+
+        var oldRepo = oldMatch.Groups[1].Value.Trim();
+        var oldTag = oldMatch.Groups[2].Value;
+        var oldDigest = oldMatch.Groups[3].Value;
+
+        var newRepo = newMatch.Groups[1].Value.Trim();
+        var newTag = newMatch.Groups[2].Value;
+        var newDigest = newMatch.Groups[3].Value;
+
+        // Repository darf sich nicht ändern
+        if (!string.Equals(oldRepo, newRepo, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Wenn beide keine Tags haben (nur @sha256), nur Digest-Wechsel erlaubt
+        if (string.IsNullOrEmpty(oldTag) && string.IsNullOrEmpty(newTag))
+            return !string.Equals(oldDigest, newDigest, StringComparison.OrdinalIgnoreCase);
+
+        // Tags müssen beide vorhanden sein oder beide fehlen
+        if (string.IsNullOrEmpty(oldTag) != string.IsNullOrEmpty(newTag))
+            return false;
+
+        // Beide haben Tags
+        if (!string.IsNullOrEmpty(oldTag) && !string.IsNullOrEmpty(newTag))
+        {
+            var oldMajor = GetMajorVersion(oldTag);
+            var newMajor = GetMajorVersion(newTag);
+
+            if (oldMajor != newMajor)
+                return false; // Major-Wechsel nicht erlaubt
+
+            // Wenn Digest sich geändert hat und Tags identisch sind -> erlaubt (Digest-Update)
+            if (string.Equals(oldTag, newTag, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(oldDigest, newDigest, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Wenn Tags unterschiedlich sind (aber gleiche Major) -> Minor/Patch, erlaubt
+            if (!string.Equals(oldTag, newTag, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Alles identisch -> keine Änderung
+            return false;
+        }
+
+        return false;
+    }
+
+    private static int GetMajorVersion(string tag)
+    {
+        // Entferne führendes 'v' falls vorhanden
+        var clean = tag.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? tag[1..] : tag;
+        var match = Regex.Match(clean, @"^(\d+)");
+        return match.Success ? int.Parse(match.Groups[1].Value) : int.MaxValue;
     }
 
     private static bool IsMajorUpgrade(string title, IReadOnlyList<string> files)

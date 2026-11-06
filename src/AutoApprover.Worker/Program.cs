@@ -1,9 +1,17 @@
 using AutoApprover.Worker;
 using AutoApprover.Worker.Services;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder(args);
+
+// --once Command-Line-Flag für One-Off-Modus (z. B. als CronJob)
+if (args.Contains("--once"))
+{
+    builder.Configuration["AdopSettings:RunOnce"] = "true";
+}
 
 // Konfiguration
 builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -41,11 +49,12 @@ builder.Services.AddSingleton<IAuditRepository, AuditRepository>(sp =>
 builder.Services.AddSingleton<IDecisionEngine, DecisionEngine>();
 
 // Teams Benachrichtigung
-builder.Services.AddSingleton<ITeamsNotifier, TeamsNotifier>(sp =>
+builder.Services.AddSingleton<ITeamsNotifier>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     var webhookUrl = config["Teams:WebhookUrl"] ?? Environment.GetEnvironmentVariable("TEAMS_WEBHOOK_URL") ?? string.Empty;
-    return new TeamsNotifier(webhookUrl);
+    var logger = sp.GetRequiredService<ILogger<TeamsNotifier>>();
+    return new TeamsNotifier(webhookUrl, logger);
 });
 
 // OpenTelemetry: Traces + Metriken mit OTLP-Exporter
@@ -71,7 +80,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var auditRepo = scope.ServiceProvider.GetRequiredService<IAuditRepository>();
-    await auditRepo.EnsureSchemaAsync();
+    await auditRepo.EnsureSchemaAsync(app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
 }
 
 await app.RunAsync();

@@ -6,10 +6,10 @@ namespace AutoApprover.Worker.Services;
 
 public sealed class AuditRepository(string connectionString) : IAuditRepository
 {
-    public async Task EnsureSchemaAsync()
+    public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
+        await conn.OpenAsync(ct);
 
         var commands = new[]
         {
@@ -73,7 +73,7 @@ public sealed class AuditRepository(string connectionString) : IAuditRepository
     public async Task WriteAsync(DecisionResult decision, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
+        await conn.OpenAsync(ct);
 
         const string sql = """
             INSERT INTO auto_approve_audit_log
