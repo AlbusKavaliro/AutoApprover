@@ -28,3 +28,8 @@ obj/
 # Environment
 .env
 *.local
+
+# Security scans
+*.sarif
+trivy-results.sarif
+sbom/
