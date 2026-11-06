@@ -1,0 +1,25 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>preview</LangVersion>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>Albus Kavaliro</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReleaseNotes>https://github.com/AlbusKavaliro/AutoApprover/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <RepositoryUrl>https://github.com/AlbusKavaliro/AutoApprover.git</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryBranch>main</RepositoryBranch>
+    <RepositoryCommit>f14ac0176ab276cd65361af378bf68a18182181a</RepositoryCommit>
+    <Version>3.2.0-beta.2</Version>
+  </PropertyGroup>
+
+</Project>

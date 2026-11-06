@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <MTPEnableVSTest>false</MTPEnableVSTest>
+    <EnableVSTestTargetingPack>false</EnableVSTestTargetingPack>
+  </PropertyGroup>
+</Project>

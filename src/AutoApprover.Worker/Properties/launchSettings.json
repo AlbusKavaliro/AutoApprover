@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "AutoApprover.Worker": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ADO_PAT": "",
+        "DB_CONNECTION_STRING": "Host=localhost;Database=autoapprover;Username=autoapprover;Password=autoapprover;"
+      }
+    }
+  }
+}

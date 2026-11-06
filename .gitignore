@@ -1,0 +1,30 @@
+# Build outputs
+bin/
+obj/
+
+# NuGet packages
+*.nupkg
+*.nuget.props
+*.nuget.targets
+
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test coverage
+*.coverage
+.coverage/
+
+# IDE
+.idea/
+*.swo
+*.swp
+
+# Temporary
+*.tmp
+
+# Environment
+.env
+*.local
