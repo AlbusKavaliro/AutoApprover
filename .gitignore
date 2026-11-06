@@ -32,4 +32,5 @@ obj/
 # Security scans
 *.sarif
 trivy-results.sarif
+trivy-fs-results.sarif
 sbom/
