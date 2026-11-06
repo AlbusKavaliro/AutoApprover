@@ -1,0 +1,115 @@
+# Benutzerhandbuch – Auto-Approver für Azure DevOps Server 2022.2
+
+## Zweck
+
+Der Auto-Approver ist ein externer .NET-Worker, der ausstehende Environment-Checks (Approvals) in YAML-Pipelines von Azure DevOps Server 2022.2 automatisch genehmigen darf – sofern strenge Regeln erfüllt sind. Er dient dazu, einfache Updates (Patch, Minor, Docker-Base-Image-SHA256-Digest) ohne manuellen Klick in Produktion zu bringen.
+
+## Funktionsweise
+
+Der Worker läuft im Hintergrund (Polling, z. B. alle 60 Sekunden) und führt folgende Schritte aus:
+
+1. **Prüfung auf ausstehende Checks** über die Azure DevOps CHECKS-API (`/_apis/pipelines/checks/check-evaluations?statusFilter=pending`).
+2. **Auflösung des zugehörigen Pull Requests** über die Git-API (Commit → PR).
+3. **Entscheidung** über die `DecisionEngine`:
+   - PR-Ersteller muss der konfigurierte Renovate-Bot sein (Platzhalter: `renovate`).
+   - Nur erlaubte Dateien: `Dockerfile`, `*.csproj`, Versionsdateien. Keine `.cs`-Logikänderungen.
+   - Bei `Dockerfile`: nur SHA256-Digest-Wechsel oder Minor/Patch-Tag-Wechsel bei `FROM`. Kein Major.
+   - Kein Major-Upgrade im PR-Titel oder Dateinamen.
+4. **Genehmigung** per `PATCH /_apis/pipelines/checks/check-evaluations/{id}` mit `{"status": "approved"}`.
+5. **Audit-Log** in PostgreSQL (Entscheidung, Grund, Zeitstempel, PR, Commit, Environment).
+6. **Benachrichtigung** an Microsoft Teams via Incoming Webhook.
+
+## Konfiguration
+
+### appsettings.json
+
+```json
+{
+  "AdopSettings": {
+    "OrganizationUrl": "https://devops.company.com/tfs/DefaultCollection",
+    "Pat": "",
+    "PollingIntervalSeconds": 60,
+    "RenovatePrCreator": "renovate"
+  },
+  "Teams": {
+    "WebhookUrl": ""
+  },
+  "Otlp": {
+    "Endpoint": "http://localhost:4317"
+  },
+  "ConnectionStrings": {
+    "AutoApproveDb": "Host=localhost;Database=autoapprover;Username=autoapprover;Password=autoapprover;"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "AutoApprover.Worker": "Debug"
+    }
+  }
+}
+```
+
+Wichtige Umgebungsvariablen (überschreiben appsettings.json):
+- `ADO_PAT` – Personal Access Token für Azure DevOps Server
+- `DB_CONNECTION_STRING` – PostgreSQL-Verbindungszeichenfolge
+- `TEAMS_WEBHOOK_URL` – Teams Incoming Webhook URL
+
+### PostgreSQL-Tabellen
+
+Beim Start legt der Worker automatisch folgende Tabellen an (falls nicht vorhanden):
+
+| Tabelle | Zweck |
+|---------|-------|
+| `environment_auto_approve_config` | Welche Environments dürfen auto-approvt werden |
+| `auto_approve_audit_log` | Jede Entscheidung wird hier protokolliert |
+| `feature_flags` | Ein-/Ausschalter (z. B. `auto_approve_global`, `auto_approve_production`) |
+
+### Beispiel: Environment-Konfig einfügen
+
+```sql
+INSERT INTO environment_auto_approve_config
+    (environment_name, project_name, pipeline_id, is_enabled, allowed_pr_creator, allowed_change_types)
+VALUES
+    ('anwendung-a-prod', 'AppA', NULL, TRUE, 'renovate', ARRAY['dockerfile_digest','patch','minor']),
+    ('anwendung-a-test', 'AppA', NULL, TRUE, 'renovate', ARRAY['dockerfile_digest','patch','minor']);
+```
+
+### Feature-Flags
+
+```sql
+-- Hauptschalter
+INSERT INTO feature_flags (name, is_enabled, description) VALUES
+('auto_approve_global', TRUE, 'Hauptschalter für den Auto-Approver'),
+('auto_approve_production', TRUE, 'Auto-Approver auch in Produktion erlauben');
+
+-- Not-Aus: Produktion deaktivieren
+UPDATE feature_flags SET is_enabled = FALSE WHERE name = 'auto_approve_production';
+```
+
+## Entscheidungsregeln (zusammengefasst)
+
+| Bedingung | Erlaubt? |
+|-----------|----------|
+| PR-Ersteller != `renovate` | ❌ Nein |
+| Kein zugehöriger PR gefunden | ❌ Nein |
+| Datei außerhalb Allow-Liste (z. B. `.cs`, `.cshtml`) | ❌ Nein |
+| Major-Upgrade im Titel oder Dateinamen | ❌ Nein |
+| Dockerfile: nur SHA256-Digest-Wechsel | ✅ Ja (`dockerfile_digest`) |
+| Nur Versionsdatei (`.csproj`, `nuspec`) geändert | ✅ Ja (`patch`) |
+| `auto_approve_global` = false | ❌ Nein (globaler Not-Aus) |
+| Environment `*-prod` + `auto_approve_production` = false | ❌ Nein |
+
+## Laufweise
+
+- **Entwicklung (lokal):** `dotnet run` mit `ASPNETCORE_ENVIRONMENT=Development`. Nutzt lokale PostgreSQL und OTel Collector.
+- **Produktion (k8s):** Als Container-Deployment im Kubernetes-Namespace. PAT als `k8s Secret`. PostgreSQL im selben Namespace.
+- **Intervall:** Konfigurierbar via `AdopSettings:PollingIntervalSeconds` (Standard: 60s).
+
+## Teams-Benachrichtigung
+
+Nach jeder Entscheidung (approve / skip / error) wird eine Nachricht an den konfigurierten Teams Incoming Webhook gesendet. Sie enthält:
+- Entscheidung und Grund
+- Änderungstyp (`dockerfile_digest`, `patch`, `minor`, `none`)
+- PR-ID, PR-Titel, PR-Ersteller
+- Environment, Projekt, Zeitstempel
