@@ -1,0 +1,9 @@
+Es gibt keine `.dockerignore`, also wird zu viel ins Image kopiert und zu viel löst eine Cache Invalidation des Docker Builds aus. Beispiel @.github/
+
+---
+
+Validiere `docker build` und stelle sicher, dass du das gebaute Image auch testweise starten kannst.
+
+---
+
+commit & push
