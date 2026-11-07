@@ -106,6 +106,34 @@ UPDATE feature_flags SET is_enabled = FALSE WHERE name = 'auto_approve_productio
 - **Produktion (k8s):** Als Container-Deployment im Kubernetes-Namespace. PAT als `k8s Secret`. PostgreSQL im selben Namespace.
 - **Intervall:** Konfigurierbar via `AdopSettings:PollingIntervalSeconds` (Standard: 60s).
 
+## OpenTelemetry (Traces, Metriken, Logs)
+
+Der Worker emittiert Observability-Daten über OpenTelemetry:
+
+**Traces (ActivitySource):**
+
+| ActivitySource | Aktivität | Kind | Tags |
+|----------------|-----------|------|------|
+| `AutoApprover.Worker` | `auto.approve.check` | Client | `environment.name`, `pipeline.name`, `change.type`, `pull_request.id`, `decision` |
+| `AutoApprover.Worker.PostgreSQL` | `postgresql.ensure_schema` | Client | `db.system`, `db.name`, `db.operation` |
+| `AutoApprover.Worker.PostgreSQL` | `postgresql.write_audit_log` | Client | `db.system`, `db.name`, `db.operation`, `db.table`, `decision`, `change_type` |
+
+Die `parentId` jeder Aktivität wird von der aktuellen `Activity` vererbt, sodass der gesamte Entscheidungsfluss (ADO-Abfrage → Entscheidung → DB-Schreibvorgang) in einem verteilten Trace nachvollziehbar ist.
+
+**Metriken (Meter `AutoApprover.Worker`):**
+
+| Metrik | Typ | Labels | Beschreibung |
+|--------|-----|--------|--------------|
+| `auto_approve_decisions_total` | Counter | `decision`, `change_type`, `environment_name` | Anzahl automatischer und übersprungener Environment-Approvals |
+
+**traceparent-Header:**
+
+Bei jedem erfolgten Auto-Approve wird der aktuelle `traceparent`-Header (aus `Activity.Current.Id`) zusammen mit dem PATCH-Request an den ADO Server gesendet. Dadurch kann der Approve im verteilten Trace des Workers mit der ADO-Seite korreliert werden.
+
+**Logging:**
+
+Logs werden über den Console-Exporter ausgegeben (OpenTelemetry 1.9.0 unterstützt `AddOtlpExporter` für Logging noch nicht direkt). Ein Upgrade auf eine neuere OpenTelemetry-Version ermöglicht den direkten OTLP-Log-Export.
+
 ## Teams-Benachrichtigung
 
 Nach jeder Entscheidung (approve / skip / error) wird eine Nachricht an den konfigurierten Teams Incoming Webhook gesendet. Sie enthält:

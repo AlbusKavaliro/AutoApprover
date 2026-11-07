@@ -13,7 +13,7 @@ ADO Server 2022.2 ←→ .NET Worker (k8s) ←→ PostgreSQL (k8s) ←→ Teams 
 | `.NET Worker` | .NET 11 BackgroundService, pollt CHECKS-API, trifft Entscheidung, schreibt Audit-Log |
 | `PostgreSQL` | Speichert Environment-Konfig, Audit-Log, Feature-Flags |
 | `PAT Secret` | k8s Secret mit Azure DevOps PAT (nur lesen + checks approven) |
-| `OTel` | OpenTelemetry für Logs, Metriken, Traces |
+| `OTel` | OpenTelemetry für Traces (ActivitySource), Metriken (Meter) und Logs (Console-Exporter) |
 
 ## Deployment (Kubernetes)
 
@@ -61,13 +61,36 @@ dotnet run --project src/AutoApprover.Worker
 
 ### Gesundheit prüfen
 
-Der Worker gibt über OpenTelemetry Metriken aus:
-- Anzahl geprüfter Checks
-- Anzahl Auto-Approves
-- Anzahl übersprungener Checks
-- Fehlerrate (ADO-API, DB, Teams)
+Der Worker gibt über OpenTelemetry Traces, Metriken und Logs aus:
 
-Logs enthalten strukturierte Informationen zu jeder Entscheidung.
+**Traces (ActivitySource):**
+
+| ActivitySource | Aktivität | Wichtige Tags |
+|----------------|-----------|---------------|
+| `AutoApprover.Worker` | `auto.approve.check` | `environment.name`, `pipeline.name`, `change.type`, `pull_request.id`, `decision` |
+| `AutoApprover.Worker.PostgreSQL` | `postgresql.ensure_schema` | `db.system`, `db.name`, `db.operation` |
+| `AutoApprover.Worker.PostgreSQL` | `postgresql.write_audit_log` | `db.system`, `db.name`, `db.operation`, `db.table`, `decision`, `change_type` |
+
+**Metriken (Meter `AutoApprover.Worker`):**
+
+| Metrik | Typ | Labels | Beschreibung |
+|--------|-----|--------|--------------|
+| `auto_approve_decisions_total` | Counter | `decision`, `change_type`, `environment_name` | Anzahl automatischer und übersprungener Environment-Approvals |
+
+**traceparent:**
+
+Bei jedem erfolgten Auto-Approve wird der aktuelle `traceparent`-Header (aus `Activity.Current.Id`) an den ADO Server mitgesendet, sodass der Approve im verteilten Trace korreliert werden kann.
+
+**Logs:**
+
+Strukturiertes Logging über den Console-Exporter mit Informationen zu jeder Entscheidung (approve / skip / error, Grund, PR-ID, Environment).
+
+Empfohlene Alerts:
+- Worker nicht erreichbar / Pod nicht Ready
+- Hohe Anzahl übersprungener Checks (mögliche Fehlkonfiguration)
+- Fehler bei ADO-API-Aufrufen (PAT abgelaufen, Netzwerk)
+- Fehler beim Schreiben in PostgreSQL
+- Hohe Rate an `auto_approve_decisions_total` mit `decision=approved` in Produktion (ungewöhnlich viele automatische Freigaben)
 
 ### Not-Aus
 

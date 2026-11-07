@@ -46,6 +46,18 @@ Empfohlene DORA-relevante Metriken:
 - **Change Failure Rate:** Anteil der Deployments, die zu Vorfällen führen (besonders wichtig bei Auto-Approve).
 - **Mean Time to Recovery:** Zeit bis zur Wiederherstellung nach einem Vorfall.
 
+Zusätzliche, direkt vom Auto-Approver emittierte Metriken (Meter `AutoApprover.Worker`):
+
+| Metrik | Typ | Labels | DORA-Bezug |
+|--------|-----|--------|------------|
+| `auto_approve_decisions_total` | Counter | `decision`, `change_type`, `environment_name` | Ermöglicht die Berechnung der automatischen Freigabe-Anteile und unterstützt die Change-Failure-Rate-Analyse bei Auto-Deployments |
+
+Zusätzliche Traces (ActivitySource `AutoApprover.Worker`):
+
+| Aktivität | Beschreibung |
+|-----------|--------------|
+| `auto.approve.check` | Verfolgt jeden automatischen Approve von der ADO-Abfrage über die Entscheidung bis zum REST-Aufruf, inkl. Tags für Environment, Pipeline, Änderungstyp und PR-ID |
+
 ## Offen / Nachzuholen
 
 | Punkt | Status | Empfehlung |
