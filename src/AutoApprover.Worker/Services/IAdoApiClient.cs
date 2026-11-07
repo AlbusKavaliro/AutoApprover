@@ -22,12 +22,4 @@ internal interface IAdoApiClient
     /// Genehmigt eine Check-Evaluation per PATCH (Bypass-Approvals).
     /// </summary>
     Task ApproveCheckAsync(int checkEvaluationId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Liefert den Diff-Inhalt aller geänderten Dockerfiles eines PR.
-    /// </summary>
-    Task<IReadOnlyDictionary<string, string>> GetDockerfileDiffsAsync(
-        string repositoryId,
-        int pullRequestId,
-        CancellationToken ct = default);
 }

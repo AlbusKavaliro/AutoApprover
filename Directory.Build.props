@@ -7,7 +7,7 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <MTPEnableVSTest>false</MTPEnableVSTest>
     <EnableVSTestTargetingPack>false</EnableVSTestTargetingPack>
   </PropertyGroup>

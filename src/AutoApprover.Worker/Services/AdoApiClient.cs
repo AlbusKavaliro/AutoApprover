@@ -77,11 +77,8 @@ internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> 
             var sourceBranch = pr.GetProperty("sourceRefName").GetString() ?? string.Empty;
             var targetBranch = pr.GetProperty("targetRefName").GetString() ?? string.Empty;
 
-            // Geänderte Dateien des PR abfragen
-            var changedFiles = await GetChangedFilesAsync(repositoryId, prId, ct).ConfigureAwait(false);
-
-            // Dockerfile-Diffs für Digest-Prüfung abfragen
-            var dockerfileDiffs = await GetDockerfileDiffsAsync(repositoryId, prId, ct).ConfigureAwait(false);
+            // Geänderte Dateien + Dockerfile-Diffs in einem Aufruf abfragen (gleicher Endpunkt)
+            var (changedFiles, dockerfileDiffs) = await GetPullRequestDiffAsync(repositoryId, prId, ct).ConfigureAwait(false);
 
             // Prüfung: Enthält der PR den Ziel-Commit als Merge-Ziel?
             if (pr.TryGetProperty("lastMergeTargetCommit", out var targetCommit) &&
@@ -114,47 +111,23 @@ internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> 
         s_logCheckApproved(logger, checkEvaluationId, response.StatusCode, null);
     }
 
-    private async Task<IReadOnlyList<string>> GetChangedFilesAsync(string repositoryId, int pullRequestId, CancellationToken ct)
+    private async Task<(IReadOnlyList<string> ChangedFiles, IReadOnlyDictionary<string, string> DockerfileDiffs)> GetPullRequestDiffAsync(
+        string repositoryId,
+        int pullRequestId,
+        CancellationToken ct)
     {
         var url = $"_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/diffs/commits?api-version={ApiVersion}";
 
         using var response = await httpClient.GetAsync(new Uri(url), ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            return Array.Empty<string>();
+            return (Array.Empty<string>(), new Dictionary<string, string>());
         }
 
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         var doc = JsonDocument.Parse(json);
 
         var files = new List<string>();
-        foreach (var change in doc.RootElement.GetProperty("changes").EnumerateArray())
-        {
-            if (change.TryGetProperty("item", out var item) && item.TryGetProperty("path", out var path))
-            {
-                files.Add(path.GetString() ?? string.Empty);
-            }
-        }
-
-        return files;
-    }
-
-    public async Task<IReadOnlyDictionary<string, string>> GetDockerfileDiffsAsync(
-        string repositoryId,
-        int pullRequestId,
-        CancellationToken ct = default)
-    {
-        var url = $"_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/diffs/commits?api-version={ApiVersion}";
-
-        using var response = await httpClient.GetAsync(new Uri(url), ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            return new Dictionary<string, string>();
-        }
-
-        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        var doc = JsonDocument.Parse(json);
-
         var diffs = new Dictionary<string, string>();
         foreach (var change in doc.RootElement.GetProperty("changes").EnumerateArray())
         {
@@ -165,6 +138,8 @@ internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> 
             }
 
             var filePath = path.GetString() ?? string.Empty;
+            files.Add(filePath);
+
             if (!IsDockerfile(filePath.ToUpperInvariant()))
             {
                 continue;
@@ -193,7 +168,7 @@ internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> 
             }
         }
 
-        return diffs;
+        return (files, diffs);
     }
 
     private static bool IsDockerfile(string upperPath) =>

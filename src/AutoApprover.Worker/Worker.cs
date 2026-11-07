@@ -49,9 +49,7 @@ internal sealed class ApprovalWorker(
     private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(
         configuration.GetValue<int>("AdopSettings:PollingIntervalSeconds", 60));
 
-    private readonly bool _runOnce = configuration.GetValue<bool>("AdopSettings:RunOnce",
-        Environment.GetEnvironmentVariable("AUTOAPPROVE_ONCE") is { } envVar &&
-        bool.TryParse(envVar, out var parsed) && parsed);
+    private readonly bool _runOnce = configuration.GetValue<bool>("AdopSettings:RunOnce", false);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
