@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6W0FASET29GD46YP7A9DSVF",
+  "session_id": "ses_e47fa349cffe15Eqi5y512DkPM",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T22:01:14.260487851Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    ".github/workflows/release.yml"
+  ],
+  "agent": "OpenCode",
+  "model": "nemotron-3.5-super-vl-free",
+  "turn_id": "28aa53b14796",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 98199,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 43360,
+    "output_tokens": 814,
+    "api_call_count": 6
+  },
+  "redaction": {
+    "replacements": 2,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 2,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 1
+  }
+}
