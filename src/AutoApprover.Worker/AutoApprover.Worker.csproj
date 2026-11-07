@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>15</LangVersion>
     <RootNamespace>AutoApprover.Worker</RootNamespace>
     <AssemblyName>AutoApprover.Worker</AssemblyName>
   </PropertyGroup>

@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <LangVersion>15</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>AutoApprover.Worker.Tests</RootNamespace>
