@@ -132,6 +132,31 @@ Die PostgreSQL-Datenbank enthält:
 
 Regelmäßige pg_dump-Backups werden empfohlen.
 
+### Audit-Log-Retention-Policy
+
+Die Tabelle `auto_approve_audit_log` ist **append-only** (UPDATE/DELETE werden auf Datenbankebene durch einen Trigger blockiert). Eine regelmäßige Bereinigung ist deshalb nur mit temporärem Deaktivieren des Triggers möglich:
+
+```sql
+-- Trigger temporär deaktivieren
+ALTER TABLE auto_approve_audit_log DISABLE TRIGGER prevent_audit_log_update;
+ALTER TABLE auto_approve_audit_log DISABLE TRIGGER prevent_audit_log_delete;
+
+-- Alte Einträge löschen (älter als 365 Tage, anpassbar)
+DELETE FROM auto_approve_audit_log WHERE created_at < NOW() - INTERVAL '365 days';
+
+-- Trigger wieder aktivieren
+ALTER TABLE auto_approve_audit_log ENABLE TRIGGER prevent_audit_log_update;
+ALTER TABLE auto_approve_audit_log ENABLE TRIGGER prevent_audit_log_delete;
+```
+
+Empfohlene Vorgehensweise:
+- **Retention:** 365 Tage im Produktivsystem (anpassbar nach Compliance-Anforderungen)
+- **Bereinigungsintervall:** Wöchentlich oder monatlich, je nach Datenvolumen
+- **Vor der Bereinigung:** Backup der Tabelle erstellen (`pg_dump -t auto_approve_audit_log`)
+- **Nach der Bereinigung:** Trigger sofort wieder aktivieren, um den Tamper-Schutz wiederherzustellen
+
+Alternativ: Alte Einträge in eine separate Archiv-Tabelle kopieren, bevor sie aus der Haupttabelle gelöscht werden.
+
 ## Überwachung (Monitoring)
 
 Empfohlene Alerts:

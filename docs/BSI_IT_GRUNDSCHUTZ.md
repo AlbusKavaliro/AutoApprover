@@ -42,6 +42,7 @@ Der Auto-Approver ist eine Anwendung im Bereich **APPLICATION SECURITY** mit Anb
 
 - PostgreSQL-Datenbank enthält Audit-Log und Konfiguration.
 - Regelmäßige Backups (pg_dump) werden empfohlen.
+- Audit-Log-Retention: 365 Tage im Produktivsystem (anpassbar). Bereinigung erfolgt durch temporäres Deaktivieren des append-only-Triggers, anschließendes DELETE und sofortiges Wiederaktivieren des Triggers. Vor jeder Bereinigung wird ein pg_dump der Tabelle erstellt.
 
 ## Offen / Nachzuholen
 
