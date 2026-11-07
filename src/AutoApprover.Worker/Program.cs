@@ -69,9 +69,12 @@ builder.Services.AddOpenTelemetry()
         .AddConsoleExporter()
         .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)));
 
-/// Logging: OTLP-Log-Export wird von der referenzierten OpenTelemetry-Version (1.9.0)
-/// noch nicht direkt über AddOtlpExporter auf OpenTelemetryLoggerOptions unterstützt.
-/// Bis ein Upgrade möglich ist, laufen Logs über den Console-Exporter.
+// Logging: strukturierte Logs über Console-Exporter. In Kubernetes landet stdout/stderr
+// bei einem Log-Sidecar (z. B. FluentBit, Promtail), der die Logs an SIEM/SOC-Systeme
+// weiterleitet. Das Audit-Log-Event (s_logAuditDecision) enthält alle Felder für die
+// Weiterverarbeitung (environment, project_pipeline, change_type, decision, reason, traceparent).
+// Ein direkter OTLP-Log-Exporter ist mit der referenzierten OpenTelemetry-Version (1.9.0)
+// noch nicht über AddOtlpExporter auf OpenTelemetryLoggerOptions verfügbar.
 builder.Logging.AddConsole();
 
 var app = builder.Build();

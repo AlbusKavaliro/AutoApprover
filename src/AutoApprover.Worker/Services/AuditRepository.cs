@@ -74,6 +74,29 @@ internal sealed class AuditRepository(string connectionString) : IAuditRepositor
             VALUES ('auto_approve_global', TRUE, 'Hauptschalter für den Auto-Approver'),
                    ('auto_approve_production', TRUE, 'Auto-Approver auch in Produktion erlauben')
             ON CONFLICT (name) DO NOTHING;
+            """,
+            """
+            -- Append-only protection: prevent UPDATE and DELETE on audit log at database level.
+            -- The trigger fires for every connecting user, including table owners and superusers
+            -- unless they explicitly bypass it. This makes the audit log tamper-resistant.
+            CREATE OR REPLACE FUNCTION prevent_audit_log_modification()
+            RETURNS trigger AS $$
+            BEGIN
+                RAISE EXCEPTION 'auto_approve_audit_log is append-only. UPDATE and DELETE are not permitted.';
+            END;
+            $$ LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS prevent_audit_log_update ON auto_approve_audit_log;
+            CREATE TRIGGER prevent_audit_log_update
+            BEFORE UPDATE ON auto_approve_audit_log
+            FOR EACH ROW
+            EXECUTE FUNCTION prevent_audit_log_modification();
+
+            DROP TRIGGER IF EXISTS prevent_audit_log_delete ON auto_approve_audit_log;
+            CREATE TRIGGER prevent_audit_log_delete
+            BEFORE DELETE ON auto_approve_audit_log
+            FOR EACH ROW
+            EXECUTE FUNCTION prevent_audit_log_modification();
             """
         };
 

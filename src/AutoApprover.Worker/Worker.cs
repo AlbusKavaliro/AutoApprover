@@ -48,6 +48,9 @@ internal sealed class ApprovalWorker(
     private static readonly Action<ILogger, int, string, Exception?> s_logCheckSkipped = LoggerMessage.Define<int, string>(
         LogLevel.Information, 1011, "CheckEvaluation {Id} uebersprungen. Grund: {Reason}");
 
+    private static readonly Action<ILogger, string, string, string, string, string, string, Exception?> s_logAuditDecision = LoggerMessage.Define<string, string, string, string, string, string>(
+        LogLevel.Information, 1012, "Auto-approve audit decision: environment={EnvironmentName}, project_pipeline={ProjectPipeline}, change_type={ChangeType}, decision={Decision}, reason={Reason}, traceparent={Traceparent}");
+
     private static readonly ActivitySource s_activitySource = new("AutoApprover.Worker");
     private static readonly Meter s_meter = new("AutoApprover.Worker");
     private static readonly Counter<int> s_autoApproveCounter = s_meter.CreateCounter<int>(
@@ -159,6 +162,17 @@ internal sealed class ApprovalWorker(
         {
             s_logCheckSkipped(logger, check.Id, decision.Reason, null);
         }
+
+        // 3.5. Strukturiertes Audit-Log für SIEM/SOC (OTEL Log)
+        s_logAuditDecision(
+            logger,
+            check.EnvironmentName ?? string.Empty,
+            $"{check.ProjectName ?? string.Empty}/{check.PipelineName ?? string.Empty}",
+            decision.ChangeType ?? string.Empty,
+            decision.Decision ?? "skipped",
+            decision.Reason ?? string.Empty,
+            Activity.Current?.Id ?? string.Empty,
+            null);
 
         // 4. Audit-Log in PostgreSQL
         await auditRepository.WriteAsync(decision with
