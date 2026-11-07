@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6VEHKK8DDA2H0JY0GXZ88MM",
+  "session_id": "ses_e4de611d9ffeWjs4UDxRbC4t6p",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T16:47:59.715784909Z",
+  "branch": "main",
+  "checkpoints_count": 4,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "OpenCode",
+  "model": "nemotron-3.5-super-vl-free",
+  "turn_id": "57b7fecebbb7",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 128713,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 11876304,
+    "output_tokens": 10295,
+    "api_call_count": 42
+  },
+  "redaction": {
+    "replacements": 36,
+    "layers": {
+      "betterleaks": 30,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 6,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 8
+  }
+}
