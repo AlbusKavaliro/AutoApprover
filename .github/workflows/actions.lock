@@ -4,8 +4,8 @@
 version: 'v0.0.3'
 workflows:
     '.github/workflows/release.yml':
-        - 'actions/checkout@v5.0.0'
-        - 'actions/dependency-review-action@v4.3.3'
+        - 'actions/checkout@v5.1.0'
+        - 'actions/dependency-review-action@v4.9.0'
         - 'actions/setup-dotnet@v4.2.0'
         - 'aquasecurity/trivy-action@v0.36.0'
         - 'docker/build-push-action@v6.8.0'
@@ -15,8 +15,8 @@ workflows:
         - 'github/codeql-action@v3.27.0'
         - 'sigstore/cosign-installer@v3.8.1'
     '.github/workflows/trivy-code-scan.yml':
-        - 'actions/checkout@v5.0.0'
-        - 'actions/upload-artifact@v4.6.0'
+        - 'actions/checkout@v5.1.0'
+        - 'actions/upload-artifact@v4.6.2'
         - 'aquasecurity/trivy-action@v0.36.0'
         - 'github/codeql-action@v3.27.0'
 dependencies:
@@ -35,14 +35,14 @@ dependencies:
         commit: 'sha1-8e8c483db84b4bee98b60c0593521ed34d9990e8'
         owner_id: 44036562
         repo_id: 197814629
-    'actions/checkout@v5.0.0':
-        ref: 'v5.0.0'
-        commit: 'sha1-08c6903cd8c0fde910a37f88322edcfb5dd907a8'
+    'actions/checkout@v5.1.0':
+        ref: 'v5.1.0'
+        commit: 'sha1-fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09'
         owner_id: 44036562
         repo_id: 197814629
-    'actions/dependency-review-action@v4.3.3':
-        ref: 'v4.3.3'
-        commit: 'sha1-72eb03d02c7872a771aacd928f3123ac62ad6d3a'
+    'actions/dependency-review-action@v4.9.0':
+        ref: 'v4.9.0'
+        commit: 'sha1-2031cfc080254a8a887f58cffee85186f0e49e48'
         owner_id: 44036562
         repo_id: 476372928
     'actions/setup-dotnet@v4.2.0':
@@ -50,9 +50,9 @@ dependencies:
         commit: 'sha1-87b7050bc53ea08284295505d98d2aa94301e852'
         owner_id: 44036562
         repo_id: 192625306
-    'actions/upload-artifact@v4.6.0':
-        ref: 'v4.6.0'
-        commit: 'sha1-65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08'
+    'actions/upload-artifact@v4.6.2':
+        ref: 'v4.6.2'
+        commit: 'sha1-ea165f8d65b6e75b540449e92b4886f43607fa02'
         owner_id: 44036562
         repo_id: 192625955
     'aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514':
