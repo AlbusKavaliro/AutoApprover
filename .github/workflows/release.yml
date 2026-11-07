@@ -27,7 +27,7 @@ jobs:
       # 1. Checkout
       # ------------------------------------------------------------------
       - name: Checkout repository
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v5.1.0
         with:
           fetch-depth: 0
 
