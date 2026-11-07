@@ -117,7 +117,8 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: 1
         run: |
-          cosign sign ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }} \
+          cosign sign ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} \
             --oidc-issuer https://token.actions.githubusercontent.com \
-            --oidc-client-id ${{ github.repository_owner }}
+            --oidc-client-id ${{ github.repository_owner }} \
+            --yes
         if: ${{ github.event_name != 'pull_request' }}
