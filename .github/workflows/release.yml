@@ -37,7 +37,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4.2.0
         with:
-          dotnet-version: 11.0.100-rc.3
+          dotnet-version: 11.0.100-rc.3.26522.148
 
       # ------------------------------------------------------------------
       # 3. Docker Buildx
