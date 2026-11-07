@@ -1,7 +1,4 @@
-using AutoApprover.Worker;
 using AutoApprover.Worker.Services;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -19,7 +16,7 @@ builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnC
                    .AddEnvironmentVariables();
 
 // Worker-Dienst
-builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<AutoApprover.Worker.ApprovalWorker>();
 
 // HTTP-Client für Azure DevOps REST-API
 builder.Services.AddHttpClient<IAdoApiClient, AdoApiClient>((sp, client) =>
@@ -54,7 +51,7 @@ builder.Services.AddSingleton<ITeamsNotifier>(sp =>
     var config = sp.GetRequiredService<IConfiguration>();
     var webhookUrl = config["Teams:WebhookUrl"] ?? Environment.GetEnvironmentVariable("TEAMS_WEBHOOK_URL") ?? string.Empty;
     var logger = sp.GetRequiredService<ILogger<TeamsNotifier>>();
-    return new TeamsNotifier(webhookUrl, logger);
+    return new TeamsNotifier(Uri.TryCreate(webhookUrl, UriKind.Absolute, out var webhookUri) ? webhookUri : null, logger);
 });
 
 // OpenTelemetry: Traces + Metriken mit OTLP-Exporter
@@ -80,7 +77,11 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var auditRepo = scope.ServiceProvider.GetRequiredService<IAuditRepository>();
+#pragma warning disable CA2007 // EnsureSchemaAsync intentionally runs on the host's synchronization context (application lifetime)
     await auditRepo.EnsureSchemaAsync(app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
+#pragma warning restore CA2007
 }
 
+#pragma warning disable CA2007 // app.RunAsync() blocks the main thread on the host's synchronization context; ConfigureAwait is intentionally omitted
 await app.RunAsync();
+#pragma warning restore CA2007

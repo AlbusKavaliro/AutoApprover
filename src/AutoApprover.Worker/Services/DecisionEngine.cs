@@ -1,8 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using AutoApprover.Worker.Models;
 
 namespace AutoApprover.Worker.Services;
 
+[SuppressMessage("Design", "CA1515", Justification = "Die Tests instanziieren DecisionEngine direkt; der Typ muss public bleiben.")]
 public sealed class DecisionEngine(
     IConfiguration configuration,
     ILogger<DecisionEngine> logger) : IDecisionEngine
@@ -11,15 +14,25 @@ public sealed class DecisionEngine(
     private readonly ILogger<DecisionEngine> _logger = logger;
 
     // FROM mcr.microsoft.com/dotnet/aspnet:8.0.10@sha256:a1b2c3...
-    private static readonly Regex FromLineRegex = new(
+    private static readonly Regex s_fromLineRegex = new(
         @"^FROM\s+(.+?)(?::([^@\s]+))?(?:@sha256:([0-9a-f]+))?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Multiline);
+
+    private static readonly string[] s_dockerfileDiffMarkers = { "=== ALT ===", "=== NEU ===" };
+
+    private static readonly Action<ILogger, int, string, string, Exception?> s_logAutoApproved = LoggerMessage.Define<int, string, string>(
+        LogLevel.Information, 4001, "Auto-Approve zugelassen für PR {PrId} ({PrTitle}) durch {Creator}");
+
+    private static readonly Action<ILogger, string, Exception?> s_logNoDockerfileDiff = LoggerMessage.Define<string>(
+        LogLevel.Warning, 4002, "Kein Diff-Inhalt fuer Dockerfile {Dockerfile} verfuegbar. PR wird uebersprungen.");
 
     public DecisionResult Evaluate(PendingCheck check, PullRequestInfo? prInfo)
     {
         // Kein PR gefunden -> nicht automatisch genehmigen
         if (prInfo is null)
+        {
             return new DecisionResult(false, "Kein zugehöriger Pull-Request gefunden", "none", 0);
+        }
 
         // 1. PR-Ersteller prüfen (nicht nur Titel!)
         if (!string.Equals(prInfo.CreatorDisplayName, _renovateCreator, StringComparison.OrdinalIgnoreCase) &&
@@ -37,6 +50,7 @@ public sealed class DecisionEngine(
         // 2. Geänderte Dateien prüfen (inkl. Dockerfile-Digest-Verifikation)
         var fileAnalysis = AnalyzeChangedFiles(prInfo);
         if (!fileAnalysis.IsAllowed)
+        {
             return new DecisionResult(
                 false,
                 $"Nicht erlaubte Dateien im PR: {string.Join(", ", fileAnalysis.DisallowedFiles)}",
@@ -44,9 +58,11 @@ public sealed class DecisionEngine(
                 prInfo.Id,
                 prInfo.Title,
                 prInfo.CreatorDisplayName);
+        }
 
         // 3. Semver: Kein Major-Upgrade (prüfe Titel und Dateinamen)
         if (IsMajorUpgrade(prInfo.Title, prInfo.ChangedFilePaths))
+        {
             return new DecisionResult(
                 false,
                 "Major-Upgrade erkannt (nicht automatisch genehmigbar)",
@@ -54,10 +70,11 @@ public sealed class DecisionEngine(
                 prInfo.Id,
                 prInfo.Title,
                 prInfo.CreatorDisplayName);
+        }
 
         // 4. Entscheidung positiv
         var changeType = fileAnalysis.ChangeType;
-        _logger.LogInformation("Auto-Approve zugelassen für PR {PrId} ({PrTitle}) durch {Creator}", prInfo.Id, prInfo.Title, prInfo.CreatorDisplayName);
+        s_logAutoApproved(_logger, prInfo.Id, prInfo.Title, prInfo.CreatorDisplayName, null);
         return new DecisionResult(
             true,
             $"Auto-Approved: PR-Ersteller={prInfo.CreatorDisplayName}, Änderungstyp={changeType}, Dateien={string.Join(", ", prInfo.ChangedFilePaths)}",
@@ -75,13 +92,13 @@ public sealed class DecisionEngine(
 
         foreach (var file in prInfo.ChangedFilePaths)
         {
-            var lower = file.ToLowerInvariant();
+            var upper = file.ToUpperInvariant();
 
-            if (IsDockerfile(lower))
+            if (IsDockerfile(upper))
             {
                 dockerfileChanges.Add(file);
             }
-            else if (IsVersionFile(lower))
+            else if (IsVersionFile(upper))
             {
                 versionFileChanges.Add(file);
             }
@@ -92,7 +109,9 @@ public sealed class DecisionEngine(
         }
 
         if (disallowed.Count > 0)
+        {
             return new FileAnalysis(false, "none", disallowed);
+        }
 
         // Nur Dockerfile-Änderungen: tatsächlichen Diff-Inhalt prüfen
         if (dockerfileChanges.Count > 0 && versionFileChanges.Count == 0)
@@ -103,7 +122,7 @@ public sealed class DecisionEngine(
                     string.IsNullOrWhiteSpace(diffContent))
                 {
                     // Kein Diff-Inhalt verfügbar -> konservativ: nicht genehmigen
-                    _logger.LogWarning("Kein Diff-Inhalt fuer Dockerfile {Dockerfile} verfuegbar. PR wird uebersprungen.", dockerfile);
+                    s_logNoDockerfileDiff(_logger, dockerfile, null);
                     return new FileAnalysis(
                         false,
                         "none",
@@ -124,7 +143,9 @@ public sealed class DecisionEngine(
 
         // Nur Versionsdateien: als patch/minor behandeln
         if (versionFileChanges.Count > 0 && dockerfileChanges.Count == 0)
+        {
             return new FileAnalysis(true, "patch", Array.Empty<string>());
+        }
 
         // Gemischt oder leer
         return prInfo.ChangedFilePaths.Count == 0
@@ -139,9 +160,11 @@ public sealed class DecisionEngine(
     private static bool IsDockerfileDiffOnlyDigestOrMinorPatch(string diffContent)
     {
         // Trenne alt und neu anhand der Marker
-        var parts = diffContent.Split(new[] { "=== ALT ===", "=== NEU ===" }, StringSplitOptions.RemoveEmptyEntries);
+        var parts = diffContent.Split(s_dockerfileDiffMarkers, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 2)
+        {
             return false;
+        }
 
         var oldContent = parts[0];
         var newContent = parts[1];
@@ -151,12 +174,16 @@ public sealed class DecisionEngine(
 
         // Anzahl der FROM-Zeilen muss identisch sein
         if (oldFromLines.Count != newFromLines.Count)
+        {
             return false;
+        }
 
         for (int i = 0; i < oldFromLines.Count; i++)
         {
             if (!IsFromLineChangeAllowed(oldFromLines[i], newFromLines[i]))
+            {
                 return false;
+            }
         }
 
         return true;
@@ -165,7 +192,7 @@ public sealed class DecisionEngine(
     private static List<string> ExtractFromLines(string content)
     {
         var lines = new List<string>();
-        foreach (Match match in FromLineRegex.Matches(content))
+        foreach (Match match in s_fromLineRegex.Matches(content))
         {
             lines.Add(match.Value);
         }
@@ -184,11 +211,13 @@ public sealed class DecisionEngine(
     /// </summary>
     private static bool IsFromLineChangeAllowed(string oldFrom, string newFrom)
     {
-        var oldMatch = FromLineRegex.Match(oldFrom);
-        var newMatch = FromLineRegex.Match(newFrom);
+        var oldMatch = s_fromLineRegex.Match(oldFrom);
+        var newMatch = s_fromLineRegex.Match(newFrom);
 
         if (!oldMatch.Success || !newMatch.Success)
+        {
             return false;
+        }
 
         var oldRepo = oldMatch.Groups[1].Value.Trim();
         var oldTag = oldMatch.Groups[2].Value;
@@ -200,15 +229,21 @@ public sealed class DecisionEngine(
 
         // Repository darf sich nicht ändern
         if (!string.Equals(oldRepo, newRepo, StringComparison.OrdinalIgnoreCase))
+        {
             return false;
+        }
 
         // Wenn beide keine Tags haben (nur @sha256), nur Digest-Wechsel erlaubt
         if (string.IsNullOrEmpty(oldTag) && string.IsNullOrEmpty(newTag))
+        {
             return !string.Equals(oldDigest, newDigest, StringComparison.OrdinalIgnoreCase);
+        }
 
         // Tags müssen beide vorhanden sein oder beide fehlen
         if (string.IsNullOrEmpty(oldTag) != string.IsNullOrEmpty(newTag))
+        {
             return false;
+        }
 
         // Beide haben Tags
         if (!string.IsNullOrEmpty(oldTag) && !string.IsNullOrEmpty(newTag))
@@ -217,7 +252,9 @@ public sealed class DecisionEngine(
             var newMajor = GetMajorVersion(newTag);
 
             if (oldMajor != newMajor)
+            {
                 return false; // Major-Wechsel nicht erlaubt
+            }
 
             // Wenn Digest sich geändert hat und Tags identisch sind -> erlaubt (Digest-Update)
             if (string.Equals(oldTag, newTag, StringComparison.OrdinalIgnoreCase) &&
@@ -228,7 +265,9 @@ public sealed class DecisionEngine(
 
             // Wenn Tags unterschiedlich sind (aber gleiche Major) -> Minor/Patch, erlaubt
             if (!string.Equals(oldTag, newTag, StringComparison.OrdinalIgnoreCase))
+            {
                 return true;
+            }
 
             // Alles identisch -> keine Änderung
             return false;
@@ -240,37 +279,43 @@ public sealed class DecisionEngine(
     private static int GetMajorVersion(string tag)
     {
         // Entferne führendes 'v' falls vorhanden
-        var clean = tag.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? tag[1..] : tag;
+        var clean = tag.StartsWith('v', StringComparison.OrdinalIgnoreCase) ? tag[1..] : tag;
         var match = Regex.Match(clean, @"^(\d+)");
-        return match.Success ? int.Parse(match.Groups[1].Value) : int.MaxValue;
+        return match.Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : int.MaxValue;
     }
 
     private static bool IsMajorUpgrade(string title, IReadOnlyList<string> files)
     {
-        var lowerTitle = title.ToLowerInvariant();
-        if (lowerTitle.Contains("major") || lowerTitle.Contains("breaking"))
+        var upperTitle = title.ToUpperInvariant();
+        if (upperTitle.Contains("MAJOR", StringComparison.Ordinal) ||
+            upperTitle.Contains("BREAKING", StringComparison.Ordinal))
+        {
             return true;
+        }
 
         foreach (var file in files)
         {
-            var lower = file.ToLowerInvariant();
-            if (lower.Contains("major") || lower.Contains("breaking"))
+            var upper = file.ToUpperInvariant();
+            if (upper.Contains("MAJOR", StringComparison.Ordinal) ||
+                upper.Contains("BREAKING", StringComparison.Ordinal))
+            {
                 return true;
+            }
         }
 
         return false;
     }
 
-    private static bool IsDockerfile(string lowerPath) =>
-        lowerPath.EndsWith("dockerfile") ||
-        lowerPath.EndsWith(".dockerfile") ||
-        lowerPath.Contains("dockerfile.");
+    private static bool IsDockerfile(string upperPath) =>
+        upperPath.EndsWith("DOCKERFILE", StringComparison.Ordinal) ||
+        upperPath.EndsWith(".DOCKERFILE", StringComparison.Ordinal) ||
+        upperPath.Contains("DOCKERFILE.", StringComparison.Ordinal);
 
-    private static bool IsVersionFile(string lowerPath) =>
-        lowerPath.EndsWith("csproj") ||
-        lowerPath.EndsWith("nuspec") ||
-        lowerPath.EndsWith("version.json") ||
-        lowerPath.EndsWith("assemblyinfo.cs");
+    private static bool IsVersionFile(string upperPath) =>
+        upperPath.EndsWith("CSPROJ", StringComparison.Ordinal) ||
+        upperPath.EndsWith("NUSPEC", StringComparison.Ordinal) ||
+        upperPath.EndsWith("VERSION.JSON", StringComparison.Ordinal) ||
+        upperPath.EndsWith("ASSEMBLYINFO.CS", StringComparison.Ordinal);
 
     private sealed record FileAnalysis(bool IsAllowed, string ChangeType, IReadOnlyList<string> DisallowedFiles);
 }

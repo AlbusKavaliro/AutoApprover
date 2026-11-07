@@ -1,5 +1,8 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace AutoApprover.Worker.Models;
 
+[SuppressMessage("Design", "CA1515", Justification = "Returned by the public DecisionEngine.Evaluate API and must stay public (CS0050).")]
 public sealed record DecisionResult(
     bool ShouldApprove,
     string Reason,

@@ -1,16 +1,51 @@
+using System.Diagnostics.CodeAnalysis;
 using AutoApprover.Worker.Models;
 using AutoApprover.Worker.Services;
 
 namespace AutoApprover.Worker;
 
-public sealed class Worker(
+[SuppressMessage("Design", "CA1812", Justification = "Wird ueber AddHostedService per DI instanziiert (Reflexion, statisch nicht nachweisbar).")]
+internal sealed class ApprovalWorker(
     IAdoApiClient adoApiClient,
     IDecisionEngine decisionEngine,
     IAuditRepository auditRepository,
     ITeamsNotifier teamsNotifier,
     IConfiguration configuration,
-    ILogger<Worker> logger) : BackgroundService
+    ILogger<ApprovalWorker> logger) : BackgroundService
 {
+    private static readonly Action<ILogger, Exception?> s_logOneOffMode = LoggerMessage.Define(
+        LogLevel.Information, 1001, "Auto-Approver Worker im One-Off-Modus (einzelner Durchlauf)");
+
+    private static readonly Action<ILogger, Exception?> s_logOneOffCompleted = LoggerMessage.Define(
+        LogLevel.Information, 1002, "Auto-Approver Worker One-Off abgeschlossen.");
+
+    private static readonly Action<ILogger, double, Exception?> s_logStarted = LoggerMessage.Define<double>(
+        LogLevel.Information, 1003, "Auto-Approver Worker gestartet. Polling-Intervall: {Interval}s");
+
+    private static readonly Action<ILogger, Exception?> s_logPollingError = LoggerMessage.Define(
+        LogLevel.Error, 1004, "Unerwarteter Fehler im Polling-Zyklus");
+
+    private static readonly Action<ILogger, Exception?> s_logEnded = LoggerMessage.Define(
+        LogLevel.Information, 1005, "Auto-Approver Worker beendet.");
+
+    private static readonly Action<ILogger, Exception?> s_logChecking = LoggerMessage.Define(
+        LogLevel.Debug, 1006, "Pruefe auf ausstehende Environment-Checks ...");
+
+    private static readonly Action<ILogger, int, Exception?> s_logPendingCount = LoggerMessage.Define<int>(
+        LogLevel.Information, 1007, "{Count} ausstehende Check-Evaluations gefunden");
+
+    private static readonly Action<ILogger, int, string, Exception?> s_logProcessingError = LoggerMessage.Define<int, string>(
+        LogLevel.Error, 1008, "Fehler bei der Verarbeitung von CheckEvaluation {CheckEvaluationId} in Environment {Environment}");
+
+    private static readonly Action<ILogger, int, string, string, Exception?> s_logProcessingCheck = LoggerMessage.Define<int, string, string>(
+        LogLevel.Information, 1009, "Verarbeite CheckEvaluation {Id} (Environment: {Environment}, Pipeline: {Pipeline})");
+
+    private static readonly Action<ILogger, int, string, Exception?> s_logCheckApproved = LoggerMessage.Define<int, string>(
+        LogLevel.Information, 1010, "CheckEvaluation {Id} automatisch genehmigt. Grund: {Reason}");
+
+    private static readonly Action<ILogger, int, string, Exception?> s_logCheckSkipped = LoggerMessage.Define<int, string>(
+        LogLevel.Information, 1011, "CheckEvaluation {Id} uebersprungen. Grund: {Reason}");
+
     private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(
         configuration.GetValue<int>("AdopSettings:PollingIntervalSeconds", 60));
 
@@ -22,65 +57,70 @@ public sealed class Worker(
     {
         if (_runOnce)
         {
-            logger.LogInformation("Auto-Approver Worker im One-Off-Modus (einzelner Durchlauf)");
-            await ProcessPendingChecksAsync(stoppingToken);
-            logger.LogInformation("Auto-Approver Worker One-Off abgeschlossen.");
+            s_logOneOffMode(logger, null);
+            await ProcessPendingChecksAsync(stoppingToken).ConfigureAwait(false);
+            s_logOneOffCompleted(logger, null);
             return;
         }
 
-        logger.LogInformation("Auto-Approver Worker gestartet. Polling-Intervall: {Interval}s", _pollingInterval.TotalSeconds);
+        s_logStarted(logger, _pollingInterval.TotalSeconds, null);
 
         while (!stoppingToken.IsCancellationRequested)
         {
+#pragma warning disable CA1031 // Ein Worker-Polling-Loop faengt bewusst alle Ausnahme ab, um den Loop am Laufen zu halten
             try
             {
-                await ProcessPendingChecksAsync(stoppingToken);
+                await ProcessPendingChecksAsync(stoppingToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Unerwarteter Fehler im Polling-Zyklus");
+                s_logPollingError(logger, ex);
             }
+#pragma warning restore CA1031
 
-            await Task.Delay(_pollingInterval, stoppingToken);
+            await Task.Delay(_pollingInterval, stoppingToken).ConfigureAwait(false);
         }
 
-        logger.LogInformation("Auto-Approver Worker beendet.");
+        s_logEnded(logger, null);
     }
 
     private async Task ProcessPendingChecksAsync(CancellationToken ct)
     {
-        logger.LogDebug("Prüfe auf ausstehende Environment-Checks ...");
+        s_logChecking(logger, null);
 
-        var pendingChecks = await adoApiClient.GetPendingChecksAsync(ct);
-        logger.LogInformation("{Count} ausstehende Check-Evaluations gefunden", pendingChecks.Count);
+        var pendingChecks = await adoApiClient.GetPendingChecksAsync(ct).ConfigureAwait(false);
+        s_logPendingCount(logger, pendingChecks.Count, null);
 
         foreach (var check in pendingChecks)
         {
             if (ct.IsCancellationRequested)
+            {
                 break;
+            }
 
             try
             {
-                await ProcessCheckAsync(check, ct);
+                await ProcessCheckAsync(check, ct).ConfigureAwait(false);
             }
+#pragma warning disable CA1031 // Pro-Check-Fehler faengt bewusst alle Ausnahme ab, damit einzelne Checks den Loop nicht abbrechen
             catch (Exception ex)
             {
-                logger.LogError(ex, "Fehler bei der Verarbeitung von CheckEvaluation {CheckEvaluationId} in Environment {Environment}", check.Id, check.EnvironmentName);
+                s_logProcessingError(logger, check.Id, check.EnvironmentName, ex);
             }
+#pragma warning restore CA1031
         }
     }
 
     private async Task ProcessCheckAsync(PendingCheck check, CancellationToken ct)
     {
-        logger.LogInformation("Verarbeite CheckEvaluation {Id} (Environment: {Environment}, Pipeline: {Pipeline})",
-            check.Id, check.EnvironmentName, check.PipelineName);
+        s_logProcessingCheck(logger, check.Id, check.EnvironmentName, check.PipelineName, null);
 
         // 1. PR / Commit auflösen, um den Ersteller und die geänderten Dateien zu prüfen
         var prInfo = await adoApiClient.GetPullRequestForCommitAsync(
             check.ProjectName,
             check.RepositoryId,
             check.SourceCommitId,
-            ct);
+            ct).ConfigureAwait(false);
 
         // 2. Entscheidung treffen
         var decision = decisionEngine.Evaluate(check, prInfo);
@@ -88,12 +128,12 @@ public sealed class Worker(
         // 3. Ausführen oder überspringen
         if (decision.ShouldApprove)
         {
-            await adoApiClient.ApproveCheckAsync(check.Id, ct);
-            logger.LogInformation("CheckEvaluation {Id} automatisch genehmigt. Grund: {Reason}", check.Id, decision.Reason);
+            await adoApiClient.ApproveCheckAsync(check.Id, ct).ConfigureAwait(false);
+            s_logCheckApproved(logger, check.Id, decision.Reason, null);
         }
         else
         {
-            logger.LogInformation("CheckEvaluation {Id} übersprungen. Grund: {Reason}", check.Id, decision.Reason);
+            s_logCheckSkipped(logger, check.Id, decision.Reason, null);
         }
 
         // 4. Audit-Log in PostgreSQL
@@ -107,9 +147,9 @@ public sealed class Worker(
             Decision = decision.ShouldApprove ? "approved" : "skipped",
             Reason = decision.Reason,
             ApprovedAt = decision.ShouldApprove ? DateTimeOffset.UtcNow : null
-        }, ct);
+        }, ct).ConfigureAwait(false);
 
         // 5. Teams-Benachrichtigung
-        await teamsNotifier.NotifyAsync(decision);
+        await teamsNotifier.NotifyAsync(decision).ConfigureAwait(false);
     }
 }

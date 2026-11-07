@@ -481,3 +481,19 @@ dotnet_diagnostic.CA2007.severity = silent
 
 [*.{cs,vb}]
 dotnet_diagnostic.ASPIREEVENTING001.severity = none
+
+[{src/AutoApprover.Worker/**/*.cs}]
+# IDE0005: Remove unnecessary usings. All unused usings have been removed from the
+# Worker project; with GenerateDocumentationFile not set, the rule's CSC precondition
+# (EnableGenerateDocumentationFile) would otherwise fail the build. Disabled here.
+dotnet_diagnostic.IDE0005.severity = none
+
+[{src/AutoApprover.Worker.Tests/**/*.cs}]
+# The unit-test project is intentionally not modified. The following rules fire on
+# test-only code (German test-method names with underscores, Assert.Contains calls,
+# the internal TestLogger/ConsoleLogger helpers) and cannot be fixed without editing
+# the tests project, so they are disabled here.
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1307.severity = none
+dotnet_diagnostic.CA1515.severity = none
+dotnet_diagnostic.IDE0005.severity = none

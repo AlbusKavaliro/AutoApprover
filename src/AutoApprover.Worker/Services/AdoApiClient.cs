@@ -1,12 +1,21 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Text.Json;
 using AutoApprover.Worker.Models;
 
 namespace AutoApprover.Worker.Services;
 
-public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> logger) : IAdoApiClient
+[SuppressMessage("Design", "CA1812", Justification = "Wird ueber AddHttpClient per DI instanziiert (Reflexion, statisch nicht nachweisbar).")]
+internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> logger) : IAdoApiClient
 {
     private const string ApiVersion = "7.2-preview.1";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
+
+    private static readonly Action<ILogger, HttpStatusCode, Exception?> s_logPullRequestsLoadFailed = LoggerMessage.Define<HttpStatusCode>(
+        LogLevel.Warning, 3001, "Konnte Pull-Requests nicht laden (Status {StatusCode})");
+
+    private static readonly Action<ILogger, int, HttpStatusCode, Exception?> s_logCheckApproved = LoggerMessage.Define<int, HttpStatusCode>(
+        LogLevel.Information, 3002, "CheckEvaluation {Id} erfolgreich genehmigt (Status {StatusCode})");
 
     public async Task<IReadOnlyList<PendingCheck>> GetPendingChecksAsync(CancellationToken ct = default)
     {
@@ -14,10 +23,10 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
         // Endpoint variiert je nach ADO Server Version; hier der typische Pfad für Azure DevOps Server 2022.x:
         var url = $"_apis/pipelines/checks/check-evaluations?api-version={ApiVersion}&statusFilter=pending";
 
-        using var response = await httpClient.GetAsync(url, ct);
+        using var response = await httpClient.GetAsync(new Uri(url), ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync(ct);
+        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         var doc = JsonDocument.Parse(json);
 
         var checks = new List<PendingCheck>();
@@ -48,14 +57,14 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
         // PRs suchen, die den Commit enthalten (lastMergeTargetCommit / lastMergeSourceCommit)
         var url = $"_apis/git/repositories/{repositoryId}/pullrequests?api-version={ApiVersion}&searchCriteria.status=active,completed&searchCriteria.repositoryId={repositoryId}";
 
-        using var response = await httpClient.GetAsync(url, ct);
+        using var response = await httpClient.GetAsync(new Uri(url), ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogWarning("Konnte Pull-Requests nicht laden (Status {StatusCode})", response.StatusCode);
+            s_logPullRequestsLoadFailed(logger, response.StatusCode, null);
             return null;
         }
 
-        var json = await response.Content.ReadAsStringAsync(ct);
+        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         var doc = JsonDocument.Parse(json);
 
         foreach (var pr in doc.RootElement.GetProperty("value").EnumerateArray())
@@ -69,10 +78,10 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
             var targetBranch = pr.GetProperty("targetRefName").GetString() ?? string.Empty;
 
             // Geänderte Dateien des PR abfragen
-            var changedFiles = await GetChangedFilesAsync(repositoryId, prId, ct);
+            var changedFiles = await GetChangedFilesAsync(repositoryId, prId, ct).ConfigureAwait(false);
 
             // Dockerfile-Diffs für Digest-Prüfung abfragen
-            var dockerfileDiffs = await GetDockerfileDiffsAsync(repositoryId, prId, ct);
+            var dockerfileDiffs = await GetDockerfileDiffsAsync(repositoryId, prId, ct).ConfigureAwait(false);
 
             // Prüfung: Enthält der PR den Ziel-Commit als Merge-Ziel?
             if (pr.TryGetProperty("lastMergeTargetCommit", out var targetCommit) &&
@@ -97,30 +106,34 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
     public async Task ApproveCheckAsync(int checkEvaluationId, CancellationToken ct = default)
     {
         var url = $"_apis/pipelines/checks/check-evaluations/{checkEvaluationId}?api-version={ApiVersion}";
-        var body = JsonSerializer.Serialize(new { status = "approved" }, JsonOptions);
+        var body = JsonSerializer.Serialize(new { status = "approved" }, s_jsonOptions);
         using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
 
-        using var response = await httpClient.PatchAsync(url, content, ct);
+        using var response = await httpClient.PatchAsync(new Uri(url), content, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        logger.LogInformation("CheckEvaluation {Id} erfolgreich genehmigt (Status {StatusCode})", checkEvaluationId, response.StatusCode);
+        s_logCheckApproved(logger, checkEvaluationId, response.StatusCode, null);
     }
 
     private async Task<IReadOnlyList<string>> GetChangedFilesAsync(string repositoryId, int pullRequestId, CancellationToken ct)
     {
         var url = $"_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/diffs/commits?api-version={ApiVersion}";
 
-        using var response = await httpClient.GetAsync(url, ct);
+        using var response = await httpClient.GetAsync(new Uri(url), ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
+        {
             return Array.Empty<string>();
+        }
 
-        var json = await response.Content.ReadAsStringAsync(ct);
+        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         var doc = JsonDocument.Parse(json);
 
         var files = new List<string>();
         foreach (var change in doc.RootElement.GetProperty("changes").EnumerateArray())
         {
             if (change.TryGetProperty("item", out var item) && item.TryGetProperty("path", out var path))
+            {
                 files.Add(path.GetString() ?? string.Empty);
+            }
         }
 
         return files;
@@ -133,11 +146,13 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
     {
         var url = $"_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/diffs/commits?api-version={ApiVersion}";
 
-        using var response = await httpClient.GetAsync(url, ct);
+        using var response = await httpClient.GetAsync(new Uri(url), ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
+        {
             return new Dictionary<string, string>();
+        }
 
-        var json = await response.Content.ReadAsStringAsync(ct);
+        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         var doc = JsonDocument.Parse(json);
 
         var diffs = new Dictionary<string, string>();
@@ -150,8 +165,10 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
             }
 
             var filePath = path.GetString() ?? string.Empty;
-            if (!IsDockerfile(filePath.ToLowerInvariant()))
+            if (!IsDockerfile(filePath.ToUpperInvariant()))
+            {
                 continue;
+            }
 
             // Versuche, alten und neuen Inhalt zu extrahieren (je nach ADO Server Version verfügbar)
             var sb = new System.Text.StringBuilder();
@@ -171,14 +188,16 @@ public sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> lo
             }
 
             if (sb.Length > 0)
+            {
                 diffs[filePath] = sb.ToString();
+            }
         }
 
         return diffs;
     }
 
-    private static bool IsDockerfile(string lowerPath) =>
-        lowerPath.EndsWith("dockerfile") ||
-        lowerPath.EndsWith(".dockerfile") ||
-        lowerPath.Contains("dockerfile.");
+    private static bool IsDockerfile(string upperPath) =>
+        upperPath.EndsWith("DOCKERFILE", StringComparison.Ordinal) ||
+        upperPath.EndsWith(".DOCKERFILE", StringComparison.Ordinal) ||
+        upperPath.Contains("DOCKERFILE.", StringComparison.Ordinal);
 }

@@ -2,7 +2,7 @@ using AutoApprover.Worker.Models;
 
 namespace AutoApprover.Worker.Services;
 
-public interface IAdoApiClient
+internal interface IAdoApiClient
 {
     /// <summary>
     /// Liefert alle ausstehende (pending) Check-Evaluations für Environments.

@@ -1,15 +1,17 @@
-using System.Text.Json;
+using System.Diagnostics.CodeAnalysis;
 using AutoApprover.Worker.Models;
 using Npgsql;
 
 namespace AutoApprover.Worker.Services;
 
-public sealed class AuditRepository(string connectionString) : IAuditRepository
+internal sealed class AuditRepository(string connectionString) : IAuditRepository
 {
+    [SuppressMessage("Security", "CA2100", Justification = "Die SQL-Statements sind fest verdingte DDL/DML-Schema-Statements ohne Benutzereingaben.")]
+    [SuppressMessage("Usage", "CA2007", Justification = "await using auf IAsyncDisposable: ConfigureAwait ist an der Deklaration nicht anwendbar; der Token wird an OpenAsync/ExecuteNonQueryAsync weitergereicht.")]
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync(ct);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
 
         var commands = new[]
         {
@@ -66,14 +68,17 @@ public sealed class AuditRepository(string connectionString) : IAuditRepository
         foreach (var cmd in commands)
         {
             await using var command = new NpgsqlCommand(cmd, conn);
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
     }
 
+    [SuppressMessage("Usage", "CA2007", Justification = "await using auf IAsyncDisposable: ConfigureAwait ist an der Deklaration nicht anwendbar; der Token wird an OpenAsync/ExecuteNonQueryAsync weitergereicht.")]
     public async Task WriteAsync(DecisionResult decision, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(decision);
+
         await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync(ct);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
 
         const string sql = """
             INSERT INTO auto_approve_audit_log
@@ -96,6 +101,6 @@ public sealed class AuditRepository(string connectionString) : IAuditRepository
         cmd.Parameters.AddWithValue("reason", decision.Reason ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("approvedAt", decision.ApprovedAt ?? (object)DBNull.Value);
 
-        await cmd.ExecuteNonQueryAsync(ct);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 }
