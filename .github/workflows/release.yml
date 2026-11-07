@@ -119,6 +119,5 @@ jobs:
         run: |
           cosign sign ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }} \
             --oidc-issuer https://token.actions.githubusercontent.com \
-            --oidc-client-id ${{ github.repository_owner }} \
-            --upload-attestations
+            --oidc-client-id ${{ github.repository_owner }}
         if: ${{ github.event_name != 'pull_request' }}
