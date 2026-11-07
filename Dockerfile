@@ -8,6 +8,8 @@ FROM mcr.microsoft.com/dotnet/sdk:11.0-azurelinux4.0-aot@sha256:e44da9920834417e
 WORKDIR /src
 
 # Projektdateien kopieren und restore (Layer-Caching für schnellere Builds)
+COPY ["Directory.Build.props", "./"]
+COPY ["Directory.Packages.props", "./"]
 COPY ["src/AutoApprover.Worker/AutoApprover.Worker.csproj", "src/AutoApprover.Worker/"]
 COPY ["src/AutoApprover.Worker/packages.lock.json", "src/AutoApprover.Worker/"]
 RUN dotnet restore "src/AutoApprover.Worker/AutoApprover.Worker.csproj"

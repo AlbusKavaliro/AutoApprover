@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
     <RootNamespace>AutoApprover.Worker</RootNamespace>
     <AssemblyName>AutoApprover.Worker</AssemblyName>
   </PropertyGroup>
