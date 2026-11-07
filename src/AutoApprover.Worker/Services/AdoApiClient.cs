@@ -24,29 +24,32 @@ internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> 
         // Endpoint variiert je nach ADO Server Version; hier der typische Pfad für Azure DevOps Server 2022.x:
         var url = $"_apis/pipelines/checks/check-evaluations?api-version={ApiVersion}&statusFilter=pending";
 
-        using var response = await httpClient.GetAsync(new Uri(url), ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        var doc = JsonDocument.Parse(json);
-
-        var checks = new List<PendingCheck>();
-        foreach (var element in doc.RootElement.EnumerateArray())
+        return await RetryPolicy.ExecuteAsync(async (retryCt) =>
         {
-            checks.Add(new PendingCheck(
-                Id: element.GetProperty("id").GetInt32(),
-                EnvironmentName: element.GetProperty("environment").GetProperty("name").GetString() ?? string.Empty,
-                ProjectName: element.GetProperty("environment").GetProperty("project").GetProperty("name").GetString() ?? string.Empty,
-                PipelineName: element.TryGetProperty("pipeline", out var p) ? p.GetProperty("name").GetString() ?? string.Empty : string.Empty,
-                RunId: element.TryGetProperty("pipelineRun", out var r) && r.TryGetProperty("id", out var rid) ? rid.GetInt32() : 0,
-                RepositoryId: element.TryGetProperty("resource", out var res) && res.TryGetProperty("repository", out var repo) && repo.TryGetProperty("id", out var rid2) ? rid2.GetString() ?? string.Empty : string.Empty,
-                SourceCommitId: element.TryGetProperty("resource", out var res2) && res2.TryGetProperty("repository", out var repo2) && repo2.TryGetProperty("version", out var ver) ? ver.GetString() ?? string.Empty : string.Empty,
-                SourceBranch: element.TryGetProperty("resource", out var res3) && res3.TryGetProperty("repository", out var repo3) && repo3.TryGetProperty("branch", out var br) ? br.GetString() : null,
-                DefinitionName: element.TryGetProperty("definition", out var def) ? def.GetProperty("name").GetString() : null
-            ));
-        }
+            using var response = await httpClient.GetAsync(new Uri(url), retryCt).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
 
-        return checks;
+            var json = await response.Content.ReadAsStringAsync(retryCt).ConfigureAwait(false);
+            var doc = JsonDocument.Parse(json);
+
+            var checks = new List<PendingCheck>();
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                checks.Add(new PendingCheck(
+                    Id: element.GetProperty("id").GetInt32(),
+                    EnvironmentName: element.GetProperty("environment").GetProperty("name").GetString() ?? string.Empty,
+                    ProjectName: element.GetProperty("environment").GetProperty("project").GetProperty("name").GetString() ?? string.Empty,
+                    PipelineName: element.TryGetProperty("pipeline", out var p) ? p.GetProperty("name").GetString() ?? string.Empty : string.Empty,
+                    RunId: element.TryGetProperty("pipelineRun", out var r) && r.TryGetProperty("id", out var rid) ? rid.GetInt32() : 0,
+                    RepositoryId: element.TryGetProperty("resource", out var res) && res.TryGetProperty("repository", out var repo) && repo.TryGetProperty("id", out var rid2) ? rid2.GetString() ?? string.Empty : string.Empty,
+                    SourceCommitId: element.TryGetProperty("resource", out var res2) && res2.TryGetProperty("repository", out var repo2) && repo2.TryGetProperty("version", out var ver) ? ver.GetString() ?? string.Empty : string.Empty,
+                    SourceBranch: element.TryGetProperty("resource", out var res3) && res3.TryGetProperty("repository", out var repo3) && repo3.TryGetProperty("branch", out var br) ? br.GetString() : null,
+                    DefinitionName: element.TryGetProperty("definition", out var def) ? def.GetProperty("name").GetString() : null
+                ));
+            }
+
+            return checks;
+        }, ct).ConfigureAwait(false);
     }
 
     public async Task<PullRequestInfo?> GetPullRequestForCommitAsync(

@@ -43,6 +43,9 @@ builder.Services.AddSingleton<IAuditRepository, AuditRepository>(sp =>
     return new AuditRepository(connString);
 });
 
+// Health-Endpoint für Kubernetes Liveness-/Readiness-Probes (Port 8080, /healthz, /readyz)
+builder.Services.AddHostedService<HealthEndpoint>();
+
 // Decision Engine
 builder.Services.AddSingleton<IDecisionEngine, DecisionEngine>();
 
