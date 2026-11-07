@@ -1,0 +1,14 @@
+Upgrade outdated NuGet packages. Also be sure to use the recommended `Aspire.Cli` (installed globally) to manage Aspire host, as recommended in newer aspire docs.
+
+---
+
+Does @src/Directory.Build.props conflict with @Directory.Build.props ? I think we don't need both?
+
+---
+
+1. Commit
+2. Re-add strict code analysis. I want `TreatWarningsAsErrors`, `AnalysisMode=AllEnabledByDefault`. I didn't add them by mistake.
+3. Fix any errors that come by due to step 2
+4. Commit.
+5. Ensure @Dockerfile builds. I did choose the correct base images, and added SHA256 checksums to all stages.
+6. Commit.
