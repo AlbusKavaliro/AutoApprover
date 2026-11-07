@@ -1,4 +1,5 @@
 using AutoApprover.Worker.Services;
+using OpenTelemetry.Exporter.OpenTelemetryProtocol;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -68,7 +69,9 @@ builder.Services.AddOpenTelemetry()
         .AddConsoleExporter()
         .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)));
 
-// OpenTelemetry: Logs über Standard-Console-Provider
+/// Logging: OTLP-Log-Export wird von der referenzierten OpenTelemetry-Version (1.9.0)
+/// noch nicht direkt über AddOtlpExporter auf OpenTelemetryLoggerOptions unterstützt.
+/// Bis ein Upgrade möglich ist, laufen Logs über den Console-Exporter.
 builder.Logging.AddConsole();
 
 var app = builder.Build();

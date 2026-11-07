@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Metrics;
 using AutoApprover.Worker.Models;
 using AutoApprover.Worker.Services;
 
@@ -45,6 +47,12 @@ internal sealed class ApprovalWorker(
 
     private static readonly Action<ILogger, int, string, Exception?> s_logCheckSkipped = LoggerMessage.Define<int, string>(
         LogLevel.Information, 1011, "CheckEvaluation {Id} uebersprungen. Grund: {Reason}");
+
+    private static readonly ActivitySource s_activitySource = new("AutoApprover.Worker");
+    private static readonly Meter s_meter = new("AutoApprover.Worker");
+    private static readonly Counter<int> s_autoApproveCounter = s_meter.CreateCounter<int>(
+        "auto_approve_decisions_total",
+        "Anzahl automatischer Environment-Approvals");
 
     private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(
         configuration.GetValue<int>("AdopSettings:PollingIntervalSeconds", 60));
@@ -126,7 +134,25 @@ internal sealed class ApprovalWorker(
         // 3. Ausführen oder überspringen
         if (decision.ShouldApprove)
         {
+            using var activity = s_activitySource.StartActivity(
+                "auto.approve.check",
+                ActivityKind.Client,
+                parentId: Activity.Current?.Id);
+
+            activity?.SetTag("environment.name", check.EnvironmentName);
+            activity?.SetTag("pipeline.name", check.PipelineName);
+            activity?.SetTag("change.type", decision.ChangeType);
+            activity?.SetTag("pull_request.id", decision.PullRequestId);
+            activity?.SetTag("decision", "approved");
+
             await adoApiClient.ApproveCheckAsync(check.Id, ct).ConfigureAwait(false);
+
+            s_autoApproveCounter.Add(
+                1,
+                new KeyValuePair<string, object?>("decision", "approved"),
+                new KeyValuePair<string, object?>("change_type", decision.ChangeType),
+                new KeyValuePair<string, object?>("environment_name", check.EnvironmentName));
+
             s_logCheckApproved(logger, check.Id, decision.Reason, null);
         }
         else

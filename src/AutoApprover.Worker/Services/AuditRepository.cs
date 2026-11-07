@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using AutoApprover.Worker.Models;
 using Npgsql;
@@ -6,10 +7,21 @@ namespace AutoApprover.Worker.Services;
 
 internal sealed class AuditRepository(string connectionString) : IAuditRepository
 {
+    private static readonly ActivitySource s_dbActivitySource = new("AutoApprover.Worker.PostgreSQL");
+
     [SuppressMessage("Security", "CA2100", Justification = "Die SQL-Statements sind fest verdingte DDL/DML-Schema-Statements ohne Benutzereingaben.")]
     [SuppressMessage("Usage", "CA2007", Justification = "await using auf IAsyncDisposable: ConfigureAwait ist an der Deklaration nicht anwendbar; der Token wird an OpenAsync/ExecuteNonQueryAsync weitergereicht.")]
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
+        using var activity = s_dbActivitySource.StartActivity(
+            "postgresql.ensure_schema",
+            ActivityKind.Client,
+            parentId: Activity.Current?.Id);
+
+        activity?.SetTag("db.system", "postgresql");
+        activity?.SetTag("db.name", "autoapprover");
+        activity?.SetTag("db.operation", "CREATE_SCHEMA");
+
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync(ct).ConfigureAwait(false);
 
@@ -76,6 +88,18 @@ internal sealed class AuditRepository(string connectionString) : IAuditRepositor
     public async Task WriteAsync(DecisionResult decision, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(decision);
+
+        using var activity = s_dbActivitySource.StartActivity(
+            "postgresql.write_audit_log",
+            ActivityKind.Client,
+            parentId: Activity.Current?.Id);
+
+        activity?.SetTag("db.system", "postgresql");
+        activity?.SetTag("db.name", "autoapprover");
+        activity?.SetTag("db.operation", "INSERT");
+        activity?.SetTag("db.table", "auto_approve_audit_log");
+        activity?.SetTag("decision", decision.Decision ?? "skipped");
+        activity?.SetTag("change_type", decision.ChangeType ?? "none");
 
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync(ct).ConfigureAwait(false);

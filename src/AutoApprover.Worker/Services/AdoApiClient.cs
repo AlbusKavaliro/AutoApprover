@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.Json;
@@ -121,7 +122,19 @@ internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> 
         var body = JsonSerializer.Serialize(new { status = "approved" }, s_jsonOptions);
         using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
 
-        using var response = await httpClient.PatchAsync(new Uri(url), content, ct).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(HttpMethod.Patch, new Uri(url))
+        {
+            Content = content
+        };
+
+        // W3C traceparent an den ADO-Server weiterleiten, damit der Approve
+        // im Trace des Workers sichtbar ist
+        if (Activity.Current is not null && !string.IsNullOrEmpty(Activity.Current.Id))
+        {
+            request.Headers.TryAddWithoutValidation("traceparent", Activity.Current.Id);
+        }
+
+        using var response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         s_logCheckApproved(logger, checkEvaluationId, response.StatusCode, null);
     }
