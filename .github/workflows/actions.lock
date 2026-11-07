@@ -6,10 +6,9 @@ workflows:
     '.github/workflows/release.yml':
         - 'actions/checkout@v5.1.0'
         - 'actions/dependency-review-action@v4.9.0'
-        - 'actions/setup-dotnet@v4.2.0'
         - 'aquasecurity/trivy-action@v0.36.0'
-        - 'docker/build-push-action@v6.8.0'
-        - 'docker/login-action@v3.4.0'
+        - 'docker/build-push-action@v6.19.2'
+        - 'docker/login-action@v3.7.0'
         - 'docker/metadata-action@v5.6.1'
         - 'docker/setup-buildx-action@v3.10.0'
         - 'github/codeql-action@v3.27.0'
@@ -45,11 +44,6 @@ dependencies:
         commit: 'sha1-2031cfc080254a8a887f58cffee85186f0e49e48'
         owner_id: 44036562
         repo_id: 476372928
-    'actions/setup-dotnet@v4.2.0':
-        ref: 'v4.2.0'
-        commit: 'sha1-87b7050bc53ea08284295505d98d2aa94301e852'
-        owner_id: 44036562
-        repo_id: 192625306
     'actions/upload-artifact@v4.6.2':
         ref: 'v4.6.2'
         commit: 'sha1-ea165f8d65b6e75b540449e92b4886f43607fa02'
@@ -71,14 +65,14 @@ dependencies:
         uses:
             - 'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae'
             - 'aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514'
-    'docker/build-push-action@v6.8.0':
-        ref: 'v6.8.0'
-        commit: 'sha1-32945a339266b759abcbdc89316275140b0fc960'
+    'docker/build-push-action@v6.19.2':
+        ref: 'v6.19.2'
+        commit: 'sha1-10e90e3645eae34f1e60eeb005ba3a3d33f178e8'
         owner_id: 5429470
         repo_id: 241092383
-    'docker/login-action@v3.4.0':
-        ref: 'v3.4.0'
-        commit: 'sha1-74a5d142397b4f367a81961eba4e8cd7edddf772'
+    'docker/login-action@v3.7.0':
+        ref: 'v3.7.0'
+        commit: 'sha1-c94ce9fb468520275223c153574b00df6fe4bcc9'
         owner_id: 5429470
         repo_id: 287743349
     'docker/metadata-action@v5.6.1':
