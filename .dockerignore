@@ -1,0 +1,59 @@
+# ============================================================
+# .dockerignore – Auto-Approver Worker
+# Dateien, die nicht ins Docker-Image kopiert werden sollen.
+# Verringert Image-Größe und vermeidet unnötige
+# Docker-Build-Cache-Invalidationen (z. B. bei .github/-Änderungen).
+# ============================================================
+
+# Git
+.git/
+.gitignore
+
+# CI / CD (nicht im Runtime-Image benötigt)
+.github/
+
+# Dokumentation (nicht im Runtime-Image benötigt)
+docs/
+
+# OpenCode / Session-Dateien
+.opencode/
+.entire/
+
+# Build-Ausgaben (lokale Builds)
+bin/
+obj/
+
+# NuGet
+*.nupkg
+*.nuget.props
+*.nuget.targets
+
+# Visual Studio / IDE
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+*.swo
+*.swp
+
+# Temporär / Umgebung
+*.tmp
+*.local
+.env
+
+# Security Scans / SBOM
+*.sarif
+trivy-results.sarif
+trivy-fs-results.sarif
+sbom/
+
+# Solution-Dateien (für dotnet publish nicht benötigt)
+*.slnx
+*.slnf
+
+# Projekt-Kontext / Dokumentation (nicht für Runtime benötigt)
+AGENTS.md
+CONVENTIONS.md
+LICENSE
+.editorconfig
