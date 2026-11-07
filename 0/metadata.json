@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6TVA6913DQT67M99P69FM54",
+  "session_id": "ses_e4ab174e6ffeNVXctzIMfJNH2I",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T11:11:57.752919692Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    ".editorconfig",
+    "Directory.Build.props",
+    "src/AutoApprover.Worker/Models/AdoModels.cs",
+    "src/AutoApprover.Worker/Models/DecisionResult.cs",
+    "src/AutoApprover.Worker/Program.cs",
+    "src/AutoApprover.Worker/Services/AdoApiClient.cs",
+    "src/AutoApprover.Worker/Services/AuditRepository.cs",
+    "src/AutoApprover.Worker/Services/DecisionEngine.cs",
+    "src/AutoApprover.Worker/Services/IAdoApiClient.cs",
+    "src/AutoApprover.Worker/Services/IAuditRepository.cs",
+    "src/AutoApprover.Worker/Services/IDecisionEngine.cs",
+    "src/AutoApprover.Worker/Services/ITeamsNotifier.cs",
+    "src/AutoApprover.Worker/Services/TeamsNotifier.cs",
+    "src/AutoApprover.Worker/Worker.cs"
+  ],
+  "agent": "OpenCode",
+  "model": "nemotron-3.5-super-vl-free",
+  "turn_id": "429ad740558f",
+  "checkpoint_transcript_start": 202,
+  "transcript_lines_at_start": 202,
+  "compact_transcript_start": 202,
+  "token_usage": {
+    "input_tokens": 34421,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1170720,
+    "output_tokens": 2910,
+    "api_call_count": 7,
+    "subagent_tokens": {
+      "input_tokens": 372026,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 13749456,
+      "output_tokens": 30701,
+      "api_call_count": 83
+    }
+  },
+  "redaction": {
+    "replacements": 84,
+    "layers": {
+      "betterleaks": 6,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 46,
+      "credentialed_uri": 0,
+      "entropy": 48,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 3
+  }
+}
