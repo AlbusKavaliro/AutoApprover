@@ -1,0 +1,16 @@
+Bitte schaue dir die Code Scanning Alerts in GitHub an: https://github.com/AlbusKavaliro/AutoApprover/security/code-scanning
+
+Müsste mit der API gehen?
+
+---
+
+Die ganzen OTEL-Pakete sind extrem veraltet. nimm bitte direkt `1.21.0-rc.1`
+
+---
+
+Aktualisiere bitte auch alle andere NuGet-Pakete.
+Im Falle von `Microsoft.Extensions` bitte auch eine Vorschauversion `11.0.0-rc.3.26522.148 `
+
+---
+
+jo
