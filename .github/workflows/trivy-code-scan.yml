@@ -8,9 +8,6 @@ on:
   schedule:
     - cron: '0 2 * * *'  # täglich um 02:00 UTC
 
-env:
-  TRIVY_VERSION: 0.59.2
-
 jobs:
   trivy-fs-scan:
     runs-on: ubuntu-latest
@@ -29,32 +26,23 @@ jobs:
           fetch-depth: 0
 
       # ------------------------------------------------------------------
-      # 2. Trivy installieren (via Aqua Security installer)
-      # ------------------------------------------------------------------
-      - name: Install Trivy
-        run: |
-          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install -y trivy=${{ env.TRIVY_VERSION }}
-
-      # ------------------------------------------------------------------
-      # 3. Trivy Filesystem Scan (Code + Konfiguration + IaC)
+      # 2. Trivy Filesystem Scan (Code + Konfiguration + IaC)
+      #    via offizielle aquasecurity/trivy-action
       # ------------------------------------------------------------------
       - name: Run Trivy filesystem scan
         id: trivy-fs
-        run: |
-          trivy fs \
-            --format sarif \
-            --output trivy-fs-results.sarif \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --skip-dirs bin,obj,.git,node_modules,.github \
-            . || true
+        uses: aquasecurity/trivy-action@0.21.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          skip-dirs: 'bin,obj,.git,node_modules,.github'
+          ignore-unfixed: true
 
       # ------------------------------------------------------------------
-      # 4. SARIF an GitHub Code Scanning senden
+      # 3. SARIF an GitHub Code Scanning senden
       # ------------------------------------------------------------------
       - name: Upload Trivy FS results to Code Scanning
         uses: github/codeql-action/upload-sarif@v3.27.0
@@ -64,7 +52,7 @@ jobs:
         if: ${{ always() }}
 
       # ------------------------------------------------------------------
-      # 5. SARIF-Artifact als Backup speichern (optional, 30 Tage)
+      # 4. SARIF-Artifact als Backup speichern (optional, 30 Tage)
       # ------------------------------------------------------------------
       - name: Upload SARIF as artifact
         uses: actions/upload-artifact@v4.6.0
