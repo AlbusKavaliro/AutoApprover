@@ -82,6 +82,9 @@ builder.Logging.AddConsole();
 
 var app = builder.Build();
 
+// Konfiguration validieren bevor der Worker startet
+ValidateConfiguration(app.Services.GetRequiredService<IConfiguration>());
+
 // Datenbank initialisieren (Tabellen anlegen, falls nicht vorhanden)
 using (var scope = app.Services.CreateScope())
 {
@@ -94,3 +97,27 @@ using (var scope = app.Services.CreateScope())
 #pragma warning disable CA2007 // app.RunAsync() blocks the main thread on the host's synchronization context; ConfigureAwait is intentionally omitted
 await app.RunAsync();
 #pragma warning restore CA2007
+
+static void ValidateConfiguration(IConfiguration configuration)
+{
+    var errors = new List<string>();
+
+    var orgUrl = configuration["AdopSettings:OrganizationUrl"] ?? Environment.GetEnvironmentVariable("ADO_ORGANIZATION_URL");
+    if (string.IsNullOrWhiteSpace(orgUrl))
+        errors.Add("AdopSettings:OrganizationUrl (oder Umgebungsvariable ADO_ORGANIZATION_URL) ist nicht gesetzt.");
+
+    var pat = configuration["AdopSettings:Pat"] ?? Environment.GetEnvironmentVariable("ADO_PAT");
+    if (string.IsNullOrWhiteSpace(pat))
+        errors.Add("AdopSettings:Pat (oder Umgebungsvariable ADO_PAT) ist nicht gesetzt.");
+
+    var dbConn = configuration.GetConnectionString("AutoApproveDb") ?? Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+    if (string.IsNullOrWhiteSpace(dbConn))
+        errors.Add("ConnectionStrings:AutoApproveDb (oder Umgebungsvariable DB_CONNECTION_STRING) ist nicht gesetzt.");
+
+    if (errors.Count > 0)
+    {
+        var message = $"Konfigurationsfehler: Der Worker kann nicht starten. Folgende Einstellungen fehlen:{Environment.NewLine}{string.Join(Environment.NewLine, errors.Select(e => $"  - {e}"))}";
+        Console.Error.WriteLine(message);
+        throw new InvalidOperationException(message);
+    }
+}
