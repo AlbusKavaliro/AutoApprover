@@ -111,7 +111,7 @@ jobs:
       # 9. Dependency Review (nur PRs – Dependency Tree / Graph)
       # ------------------------------------------------------------------
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4.3.3
+        uses: actions/dependency-review-action@v4.9.0
         if: ${{ github.event_name == 'pull_request' }}
 
       # ------------------------------------------------------------------
