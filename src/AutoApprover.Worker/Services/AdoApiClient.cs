@@ -77,24 +77,39 @@ internal sealed class AdoApiClient(HttpClient httpClient, ILogger<AdoApiClient> 
             var sourceBranch = pr.GetProperty("sourceRefName").GetString() ?? string.Empty;
             var targetBranch = pr.GetProperty("targetRefName").GetString() ?? string.Empty;
 
-            // Geänderte Dateien + Dockerfile-Diffs in einem Aufruf abfragen (gleicher Endpunkt)
-            var (changedFiles, dockerfileDiffs) = await GetPullRequestDiffAsync(repositoryId, prId, ct).ConfigureAwait(false);
-
-            // Prüfung: Enthält der PR den Ziel-Commit als Merge-Ziel?
+            // Prüfung: Enthält der PR den Ziel-Commit als Merge-Ziel (Regulärer Merge)
+            // oder als Quell-Commit (Squash-Merge über lastMergeSourceCommit)?
+            var matchesCommit = false;
             if (pr.TryGetProperty("lastMergeTargetCommit", out var targetCommit) &&
                 targetCommit.TryGetProperty("commitId", out var tcid) &&
                 tcid.GetString() == commitId)
             {
-                return new PullRequestInfo(
-                    Id: prId,
-                    Title: title,
-                    CreatorDisplayName: creatorDisplay,
-                    CreatorUniqueName: creatorUnique,
-                    SourceBranch: sourceBranch,
-                    TargetBranch: targetBranch,
-                    ChangedFilePaths: changedFiles,
-                    DockerfileDiffs: dockerfileDiffs);
+                matchesCommit = true;
             }
+            else if (pr.TryGetProperty("lastMergeSourceCommit", out var sourceCommit) &&
+                sourceCommit.TryGetProperty("commitId", out var scid) &&
+                scid.GetString() == commitId)
+            {
+                matchesCommit = true;
+            }
+
+            if (!matchesCommit)
+            {
+                continue;
+            }
+
+            // Geänderte Dateien + Dockerfile-Diffs erst nach erfolgreichem Match abfragen (gleicher Endpunkt)
+            var (changedFiles, dockerfileDiffs) = await GetPullRequestDiffAsync(repositoryId, prId, ct).ConfigureAwait(false);
+
+            return new PullRequestInfo(
+                Id: prId,
+                Title: title,
+                CreatorDisplayName: creatorDisplay,
+                CreatorUniqueName: creatorUnique,
+                SourceBranch: sourceBranch,
+                TargetBranch: targetBranch,
+                ChangedFilePaths: changedFiles,
+                DockerfileDiffs: dockerfileDiffs);
         }
 
         return null;

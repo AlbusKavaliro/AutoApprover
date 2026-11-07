@@ -23,5 +23,8 @@ RUN dotnet publish "AutoApprover.Worker.csproj" -c Release -o /app/publish /p:Us
 FROM mcr.microsoft.com/dotnet/aspnet:11.0-azurelinux4.0-distroless@sha256:e8a4fd1b2102d9d4565971922f549a73e25b4a5752eaaf3b5fc3363ecaf80b4b AS runtime
 WORKDIR /app
 
+# Nicht-root User für Container-Sicherheit (BSI IT-Grundschutz / DORA)
+USER nonroot
+
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "AutoApprover.Worker.dll"]
