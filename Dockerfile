@@ -9,6 +9,7 @@ WORKDIR /src
 
 # Projektdateien kopieren und restore (Layer-Caching für schnellere Builds)
 COPY ["src/AutoApprover.Worker/AutoApprover.Worker.csproj", "src/AutoApprover.Worker/"]
+COPY ["src/AutoApprover.Worker/packages.lock.json", "src/AutoApprover.Worker/"]
 RUN dotnet restore "src/AutoApprover.Worker/AutoApprover.Worker.csproj"
 
 # Quellcode kopieren und veröffentlichen
