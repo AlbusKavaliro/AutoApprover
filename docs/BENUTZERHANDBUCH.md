@@ -62,7 +62,7 @@ Beim Start legt der Worker automatisch folgende Tabellen an (falls nicht vorhand
 | Tabelle | Zweck |
 |---------|-------|
 | `environment_auto_approve_config` | Welche Environments dürfen auto-approvt werden |
-| `auto_approve_audit_log` | Jede Entscheidung wird hier protokolliert |
+| `auto_approve_audit_log` | Jede Entscheidung wird hier protokolliert. **Append-only**: UPDATE/DELETE werden auf Datenbankebene durch einen Trigger blockiert (Tamper-Proof). |
 | `feature_flags` | Ein-/Ausschalter (z. B. `auto_approve_global`, `auto_approve_production`) |
 
 ### Beispiel: Environment-Konfig einfügen
@@ -130,9 +130,23 @@ Die `parentId` jeder Aktivität wird von der aktuellen `Activity` vererbt, sodas
 
 Bei jedem erfolgten Auto-Approve wird der aktuelle `traceparent`-Header (aus `Activity.Current.Id`) zusammen mit dem PATCH-Request an den ADO Server gesendet. Dadurch kann der Approve im verteilten Trace des Workers mit der ADO-Seite korreliert werden.
 
-**Logging:**
+**Logging (SIEM/SOC-fähig):**
 
-Logs werden über den Console-Exporter ausgegeben (OpenTelemetry 1.9.0 unterstützt `AddOtlpExporter` für Logging noch nicht direkt). Ein Upgrade auf eine neuere OpenTelemetry-Version ermöglicht den direkten OTLP-Log-Export.
+Bei jeder Entscheidung (approve / skip) wird ein strukturiertes Log-Event über den Console-Exporter ausgegeben. In Kubernetes landet stdout bei einem Log-Sidecar (z. B. FluentBit, Promtail), der die Logs an SIEM/SOC-Systeme (ELK, Splunk, Sentinel, etc.) weiterleitet.
+
+**Struktur des Audit-Log-Events:**
+
+```
+Auto-approve audit decision:
+  environment=<EnvironmentName>
+  project_pipeline=<ProjectName>/<PipelineName>
+  change_type=<dockerfile_digest|patch|minor|none>
+  decision=<approved|skipped>
+  reason=<Grundtext>
+  traceparent=<Activity.Current.Id>
+```
+
+Ein direkter OTLP-Log-Exporter ist mit der referenzierten OpenTelemetry-Version (1.9.0) noch nicht über `AddOtlpExporter` auf `OpenTelemetryLoggerOptions` verfügbar. Der Console-Exporter ist das stabiler arbeitende Muster für K8s (stdout → Sidecar → SIEM). Bei einem OTel-Upgrade lässt sich der Exporter leicht umstellen.
 
 ## Teams-Benachrichtigung
 

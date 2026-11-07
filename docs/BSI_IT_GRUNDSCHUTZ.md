@@ -31,11 +31,12 @@ Der Auto-Approver ist eine Anwendung im Bereich **APPLICATION SECURITY** mit Anb
 
 - Betriebshandbuch vorhanden (siehe BETRIEBHANDBUCH.md).
 - Not-Aus über Feature-Flag in PostgreSQL (`auto_approve_global`).
-- Audit-Log aller Entscheidungen in PostgreSQL.
+- Audit-Log aller Entscheidungen in PostgreSQL. **Tamper-Proof**: Die Tabelle `auto_approve_audit_log` ist append-only – UPDATE/DELETE werden auf Datenbankebene durch einen `BEFORE UPDATE`/`BEFORE DELETE`-Trigger blockiert (auch für den Connecting-User).
 - Strukturiertes Logging mit OpenTelemetry.
 - Tracing: Aktivitäten `auto.approve.check` (ADO-Approve) sowie `postgresql.ensure_schema` / `postgresql.write_audit_log` (DB-Zugriffe) mit `db.*`-Tags.
 - Metriken: Counter `auto_approve_decisions_total` mit Labels `decision`, `change_type`, `environment_name`.
 - `traceparent`-Header wird bei jedem automatischen Approve an den ADO Server mitgesendet (W3C Trace Context).
+- SIEM/SOC-Bereitstellung: Strukturiertes Audit-Log-Event pro Entscheidung über Console-Exporter (stdout → K8s Log-Sidecar → SIEM). Felder: `environment`, `project_pipeline`, `change_type`, `decision`, `reason`, `traceparent`.
 
 ### Datensicherung (OPS.4.1)
 

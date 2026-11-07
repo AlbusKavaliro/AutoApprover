@@ -11,7 +11,7 @@ ADO Server 2022.2 ←→ .NET Worker (k8s) ←→ PostgreSQL (k8s) ←→ Teams 
 | Komponente | Beschreibung |
 |------------|--------------|
 | `.NET Worker` | .NET 11 BackgroundService, pollt CHECKS-API, trifft Entscheidung, schreibt Audit-Log |
-| `PostgreSQL` | Speichert Environment-Konfig, Audit-Log, Feature-Flags |
+| `PostgreSQL` | Speichert Environment-Konfig, Audit-Log (append-only), Feature-Flags |
 | `PAT Secret` | k8s Secret mit Azure DevOps PAT (nur lesen + checks approven) |
 | `OTel` | OpenTelemetry für Traces (ActivitySource), Metriken (Meter) und Logs (Console-Exporter) |
 
@@ -81,9 +81,20 @@ Der Worker gibt über OpenTelemetry Traces, Metriken und Logs aus:
 
 Bei jedem erfolgten Auto-Approve wird der aktuelle `traceparent`-Header (aus `Activity.Current.Id`) an den ADO Server mitgesendet, sodass der Approve im verteilten Trace korreliert werden kann.
 
-**Logs:**
+**Logs (SIEM/SOC):**
 
-Strukturiertes Logging über den Console-Exporter mit Informationen zu jeder Entscheidung (approve / skip / error, Grund, PR-ID, Environment).
+Bei jeder Entscheidung wird ein strukturiertes Log-Event über den Console-Exporter ausgegeben. In Kubernetes landet stdout bei einem Log-Sidecar (z. B. FluentBit, Promtail), der die Logs an SIEM/SOC-Systeme weiterleitet.
+
+Format des Audit-Log-Events:
+```
+Auto-approve audit decision:
+  environment=<EnvironmentName>
+  project_pipeline=<ProjectName>/<PipelineName>
+  change_type=<dockerfile_digest|patch|minor|none>
+  decision=<approved|skipped>
+  reason=<Grundtext>
+  traceparent=<Activity.Current.Id>
+```
 
 Empfohlene Alerts:
 - Worker nicht erreichbar / Pod nicht Ready
@@ -91,6 +102,7 @@ Empfohlene Alerts:
 - Fehler bei ADO-API-Aufrufen (PAT abgelaufen, Netzwerk)
 - Fehler beim Schreiben in PostgreSQL
 - Hohe Rate an `auto_approve_decisions_total` mit `decision=approved` in Produktion (ungewöhnlich viele automatische Freigaben)
+- Fehlende Audit-Log-Events (SIEM-Sidecar nicht erreichbar)
 
 ### Not-Aus
 

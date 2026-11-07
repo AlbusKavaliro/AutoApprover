@@ -58,6 +58,22 @@ Zusätzliche Traces (ActivitySource `AutoApprover.Worker`):
 |-----------|--------------|
 | `auto.approve.check` | Verfolgt jeden automatischen Approve von der ADO-Abfrage über die Entscheidung bis zum REST-Aufruf, inkl. Tags für Environment, Pipeline, Änderungstyp und PR-ID |
 
+**SIEM/SOC-Bereitstellung:**
+
+Jede Entscheidung wird als strukturiertes Log-Event über den Console-Exporter ausgegeben (stdout → K8s Log-Sidecar → SIEM/SOC):
+
+```
+Auto-approve audit decision:
+  environment=<EnvironmentName>
+  project_pipeline=<ProjectName>/<PipelineName>
+  change_type=<dockerfile_digest|patch|minor|none>
+  decision=<approved|skipped>
+  reason=<Grundtext>
+  traceparent=<Activity.Current.Id>
+```
+
+Dieses Log-Event liefert die Rohdaten für die DORA-relevante **Change Failure Rate** und die **Lead Time for Changes** im Kontext automatischer Deployments: jedes `decision=approved`-Event kann mit dem tatsächlichen Deployment-Ergebnis (aus dem CD-Pipeline-Log) korreliert werden.
+
 ## Offen / Nachzuholen
 
 | Punkt | Status | Empfehlung |
