@@ -45,7 +45,7 @@ jobs:
       # 3. SARIF an GitHub Code Scanning senden
       # ------------------------------------------------------------------
       - name: Upload Trivy FS results to Code Scanning
-        uses: github/codeql-action/upload-sarif@v3.27.0
+        uses: github/codeql-action/upload-sarif@v3.39.3
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem
