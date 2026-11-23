@@ -55,7 +55,7 @@ jobs:
       # 4. SARIF-Artifact als Backup speichern (optional, 30 Tage)
       # ------------------------------------------------------------------
       - name: Upload SARIF as artifact
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: trivy-fs-sarif
           path: trivy-fs-results.sarif
