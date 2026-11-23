@@ -20,7 +20,7 @@ WORKDIR "/src/src/AutoApprover.Worker"
 RUN dotnet publish "AutoApprover.Worker.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # --- Runtime Stage ----------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:11.0-azurelinux3.0-distroless@sha256:bd252bde098c75a41df4c749f73bb14858a08e7f2429d85812a93e177c503731 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-azurelinux3.0-distroless@sha256:b6dbf7ea30a494c53fdfc000e0435db1cf1d6f74245e67b9e28ae097f9ab99d9 AS runtime
 WORKDIR /app
 
 # Nicht-root User für Container-Sicherheit (BSI IT-Grundschutz / DORA)
