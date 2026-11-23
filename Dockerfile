@@ -4,7 +4,7 @@
 # ============================================================
 
 # --- Build Stage ------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:11.0-azurelinux4.0-aot@sha256:e15f37b39cd56128542d0c05f10d65be344463b4fb0845ea37b372472b55a656 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0-azurelinux4.0-aot@sha256:b39579f960155ff87f02dea478204bc1f1e2adca6b8f48d70087ce0d5b2cab80 AS build
 WORKDIR /src
 
 # Projektdateien kopieren und restore (Layer-Caching für schnellere Builds)
