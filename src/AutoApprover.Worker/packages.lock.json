@@ -50,20 +50,20 @@
       },
       "OpenTelemetry.Exporter.Console": {
         "type": "Direct",
-        "requested": "[1.21.0-rc.1, )",
-        "resolved": "1.21.0-rc.1",
-        "contentHash": "b+m469VTagakVE6oxbrx55dKSwaqsM+h503E8FuU7hE1y21ntXi7BfdORHWBkkJUi9cTRMAsi3nT/zMkMq7k4A==",
+        "requested": "[1.21.0, )",
+        "resolved": "1.21.0",
+        "contentHash": "J8XbCU0TP+ULX9s+MGRe/iIvy5FZAi1J2YB3LyyxcYqH+nzDuUWEsTbzbL/jwqr3V/2njv564wK2NM1tn7OrfA==",
         "dependencies": {
-          "OpenTelemetry": "1.21.0-rc.1"
+          "OpenTelemetry": "1.21.0"
         }
       },
       "OpenTelemetry.Exporter.OpenTelemetryProtocol": {
         "type": "Direct",
-        "requested": "[1.21.0-rc.1, )",
-        "resolved": "1.21.0-rc.1",
-        "contentHash": "hkKWxqOhd2ZIzugs88pjReBZqwBGVt9suOt2ldVxWX6LB21HVqaGJtAg7CO8M+mg0+tWHCxRZ5FqQzfi5jZT0w==",
+        "requested": "[1.21.0, )",
+        "resolved": "1.21.0",
+        "contentHash": "Xo/3lqiZhv+an00t5N9Jxt3U2vIOcY6/bu0wo5LiQrrRIwd/8dv9FdlIVB3k3ypiyG1VkbCXhWH1tiC48HQS4w==",
         "dependencies": {
-          "OpenTelemetry": "1.21.0-rc.1"
+          "OpenTelemetry": "1.21.0"
         }
       },
       "OpenTelemetry.Extensions.Hosting": {
@@ -232,12 +232,12 @@
       },
       "OpenTelemetry": {
         "type": "Transitive",
-        "resolved": "1.21.0-rc.1",
-        "contentHash": "pLtXNDBOvp8Ec98msbuhzTLaE03nai389zi6+S0MKj31rtfpOBaGLGHpXOLZReVGJxRiXjBEC/BmgPjgIYzlkA==",
+        "resolved": "1.21.0",
+        "contentHash": "ynAzNO/ebDTPxARbz4z/HgL8azMk/iDk4GXFuIRQ6krr1+a5QMC4eoiXRl+e7COd+3RLyL/yTuE6bevwqbv4Bw==",
         "dependencies": {
-          "Microsoft.Extensions.Configuration.EnvironmentVariables": "11.0.0-rc.3.26522.148",
-          "Microsoft.Extensions.Logging.Configuration": "11.0.0-rc.3.26522.148",
-          "OpenTelemetry.Api.ProviderBuilderExtensions": "1.21.0-rc.1"
+          "Microsoft.Extensions.Configuration.EnvironmentVariables": "11.0.0",
+          "Microsoft.Extensions.Logging.Configuration": "11.0.0",
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "1.21.0"
         }
       },
       "OpenTelemetry.Api.ProviderBuilderExtensions": {
